@@ -141,6 +141,21 @@ class BrokerConfig(BaseModel):
     commission_per_order: float = Field(default=0.0, ge=0.0)
 
 
+class EngineConfig(BaseModel):
+    """Backtest-engine settings (env-prefixed ``PAPERHANDS_ENGINE__``).
+
+    ``calendar_symbol`` defines the trading calendar (and pre-stages the §9 benchmark);
+    ``rebalance_every_n_days`` controls decision cadence (1 = every trading day);
+    ``adv_window`` is the lookback for the gate's average-dollar-volume liquidity input.
+    """
+
+    model_config = {"frozen": True}
+
+    calendar_symbol: str = "SPY"
+    rebalance_every_n_days: int = Field(default=1, gt=0)
+    adv_window: int = Field(default=20, gt=0)
+
+
 class Settings(BaseSettings):
     """Top-level config. Env vars are prefixed ``PAPERHANDS_``; nested groups use ``__``.
 
@@ -167,6 +182,7 @@ class Settings(BaseSettings):
     signals: SignalConfig = Field(default_factory=SignalConfig)
     strategy: StrategyConfig = Field(default_factory=StrategyConfig)
     broker: BrokerConfig = Field(default_factory=BrokerConfig)
+    engine: EngineConfig = Field(default_factory=EngineConfig)
 
     # Secrets — optional here; required by later slices. Read from their standard env names.
     tiingo_api_key: str | None = Field(default=None, alias="TIINGO_API_KEY")

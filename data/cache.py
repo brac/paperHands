@@ -28,6 +28,10 @@ class ParquetBarCache:
 
     def __init__(self, cache_dir: str | Path, namespace: str = "tiingo") -> None:
         self._dir = Path(cache_dir) / namespace
+        # In-memory memo of loaded frames, keyed by upper-cased symbol. A backtest re-reads
+        # each symbol every step; this turns thousands of parquet parses into one per run.
+        # Frames are treated as read-only everywhere (callers slice, never mutate in place).
+        self._memo: dict[str, pd.DataFrame] = {}
 
     def _path(self, symbol: str) -> Path:
         return self._dir / f"{symbol.upper()}.parquet"
@@ -37,12 +41,18 @@ class ParquetBarCache:
 
     def load(self, symbol: str) -> pd.DataFrame | None:
         """Return the cached bar frame for ``symbol``, or ``None`` if not cached."""
+        key = symbol.upper()
+        memoized = self._memo.get(key)
+        if memoized is not None:
+            return memoized
         path = self._path(symbol)
         if not path.exists():
             return None
         df = pd.read_parquet(path)
         df.index = pd.DatetimeIndex(df.index, name=INDEX_NAME)
-        return validate_bars(df.sort_index())
+        frame = validate_bars(df.sort_index())
+        self._memo[key] = frame
+        return frame
 
     def store(
         self, symbol: str, df: pd.DataFrame, fetched_start: date, fetched_end: date
@@ -62,6 +72,7 @@ class ParquetBarCache:
 
         self._dir.mkdir(parents=True, exist_ok=True)
         merged.to_parquet(self._path(symbol))
+        self._memo[symbol.upper()] = merged  # keep the memo consistent with disk
 
         lo, hi = self._coverage(symbol)
         new_lo = fetched_start if lo is None else min(lo, fetched_start)

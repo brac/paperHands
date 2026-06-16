@@ -39,6 +39,7 @@ from core.logging import configure_logging, get_logger
 from data import build_data_provider
 from data.base import DataProvider
 from data.frame import COLUMNS, INDEX_NAME
+from engine import build_engine
 from ingest import build_snapshot_assembler
 from ingest.snapshot import MarketSnapshot
 from risk import apply_risk_gate
@@ -66,6 +67,7 @@ def main() -> int:
     _smoke_signals(log)
     _smoke_strategy(log)
     _smoke_broker(log)
+    _smoke_engine(settings, log)
 
     # Tiny end-to-end exercise of the sovereign gate: a sane buy, an oversized buy that
     # must be clamped, and a junk order that must be rejected.
@@ -228,6 +230,19 @@ def _smoke_broker(log: logging.Logger) -> None:
     state = broker.account_state()
     log.info("broker | post-fill cash=%.2f equity=%.2f day_pnl=%.2f",
              state.cash, state.equity, state.day_pnl)
+
+
+def _smoke_engine(settings: Settings, log: logging.Logger) -> None:
+    """Run a short real backtest when a Tiingo key is set; otherwise skip. Needs network once."""
+    if not settings.tiingo_api_key:
+        log.info("engine | no TIINGO_API_KEY set - skipping backtest")
+        return
+    engine = build_engine(settings)
+    result = engine.run(date(2024, 1, 1), date(2024, 3, 31), universe=["AAPL", "MSFT"])
+    log.info(
+        "engine | backtest steps=%d bars=%d fills=%d final_equity=%.2f",
+        len(result.steps), len(result.equity_curve), len(result.fills), result.final_equity(),
+    )
 
 
 def _fmt(value: float | None) -> str:
