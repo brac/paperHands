@@ -91,6 +91,10 @@ class SimulatedBroker:
             day_pnl=day_pnl,
         )
 
+    def open_orders(self) -> tuple[str, ...]:
+        """No async open orders in simulation — pending plans fill on the next bar's open."""
+        return ()
+
     # -- Simulation driving (called by the backtest engine) ---------------------------
     def fill_at_open(self, open_prices: Mapping[str, float]) -> list[Fill]:
         """Execute the queued orders at this bar's open prices (with costs). Returns fills."""

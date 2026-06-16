@@ -8,11 +8,12 @@ factored into ``_assert_live_allowed`` so it can be checked without constructing
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 
 import pytest
 
-from broker import AlpacaBroker
+from broker import AlpacaBroker, MarketClock
 from broker.alpaca import LIVE_CONFIRM_TOKEN, _assert_live_allowed
 from core.config import ExecConfig, Settings
 from core.contracts import ExecutableOrder, ExecutablePlan
@@ -39,6 +40,18 @@ class _FakeSubmitted:
     id: str
 
 
+@dataclass
+class _FakeOrder:
+    symbol: str
+
+
+@dataclass
+class _FakeClock:
+    is_open: bool
+    next_open: datetime
+    next_close: datetime
+
+
 class _FakeClient:
     """Records submitted order requests and returns canned account/position objects."""
 
@@ -46,10 +59,15 @@ class _FakeClient:
         self,
         account: _FakeAccount | None = None,
         positions: list[_FakePosition] | None = None,
+        orders: list[_FakeOrder] | None = None,
+        clock: _FakeClock | None = None,
     ) -> None:
         self._account = account if account is not None else _FakeAccount()
         self._positions = positions if positions is not None else []
+        self._orders = orders if orders is not None else []
+        self._clock = clock
         self.submitted: list[Any] = []
+        self.orders_query: Any = "<unset>"
         self._next_id = 0
 
     def get_account(self) -> _FakeAccount:
@@ -62,6 +80,14 @@ class _FakeClient:
         self.submitted.append(order_data)
         self._next_id += 1
         return _FakeSubmitted(id=f"order-{self._next_id}")
+
+    def get_orders(self, filter: Any = None) -> list[_FakeOrder]:  # noqa: A002 - alpaca name
+        self.orders_query = filter
+        return list(self._orders)
+
+    def get_clock(self) -> _FakeClock:
+        assert self._clock is not None
+        return self._clock
 
 
 def _stub_order_factory(
@@ -84,6 +110,8 @@ def _broker(client: _FakeClient, *, live_trading: bool = False, **exec_kw: Any) 
         live_trading=live_trading,
         live_confirm=None,
         order_factory=_stub_order_factory,
+        # Sentinel query — keeps the real alpaca-py GetOrdersRequest import out of tests.
+        open_orders_query=lambda: "OPEN",
     )
 
 
@@ -151,6 +179,30 @@ def test_empty_plan_submits_nothing():
     broker.submit(ExecutablePlan())
     assert client.submitted == []
     assert broker.last_orders == ()
+
+
+# -- open orders -------------------------------------------------------------------------
+def test_open_orders_maps_symbols_deduped_and_sorted():
+    client = _FakeClient(
+        orders=[_FakeOrder("MSFT"), _FakeOrder("AAPL"), _FakeOrder("MSFT")]
+    )
+    broker = _broker(client)
+    assert broker.open_orders() == ("AAPL", "MSFT")
+    # The injected query is the object handed to the client's get_orders(filter=...).
+    assert client.orders_query == "OPEN"
+
+
+def test_open_orders_empty_when_none_pending():
+    assert _broker(_FakeClient(orders=[])).open_orders() == ()
+
+
+# -- market clock ------------------------------------------------------------------------
+def test_market_clock_maps_fields():
+    open_dt = datetime(2026, 6, 17, 9, 30)
+    close_dt = datetime(2026, 6, 17, 16, 0)
+    client = _FakeClient(clock=_FakeClock(is_open=True, next_open=open_dt, next_close=close_dt))
+    clock = _broker(client).market_clock()
+    assert clock == MarketClock(is_open=True, next_open=open_dt, next_close=close_dt)
 
 
 # -- endpoint selection ------------------------------------------------------------------

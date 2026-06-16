@@ -25,8 +25,12 @@ class Broker(Protocol):
         """Return current cash, equity, buying power, and open positions."""
         ...
 
+    def open_orders(self) -> tuple[str, ...]:
+        """Symbols with a pending (unfilled) open order. Backtest brokers return ``()``."""
+        ...
 
-from broker.alpaca import AlpacaBroker, build_alpaca_broker  # noqa: E402
+
+from broker.alpaca import AlpacaBroker, MarketClock, build_alpaca_broker  # noqa: E402
 from broker.simulated import EquityPoint, Fill, SimulatedBroker  # noqa: E402
 
 __all__ = [
@@ -35,5 +39,6 @@ __all__ = [
     "Fill",
     "EquityPoint",
     "AlpacaBroker",
+    "MarketClock",
     "build_alpaca_broker",
 ]

@@ -140,3 +140,10 @@ def test_average_cost_on_add():
 
 def test_implements_broker_protocol():
     assert isinstance(_broker(), Broker)
+
+
+def test_open_orders_is_empty():
+    # Simulation has no async pending orders — queued plans fill on the next bar's open.
+    b = _broker()
+    b.submit(_plan(_buy("AAA", 10.0)))
+    assert b.open_orders() == ()

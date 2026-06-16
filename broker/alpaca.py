@@ -16,6 +16,8 @@ allowed. The guard lives in ``_assert_live_allowed`` so it can be unit-tested wi
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import datetime
 from typing import TYPE_CHECKING, Any, Protocol
 
 from core.config import ExecConfig
@@ -37,6 +39,19 @@ LIVE_CONFIRM_TOKEN = "I_UNDERSTAND"
 # fractional) tuple. Injected so tests stub it and the alpaca-py import stays lazy.
 OrderFactory = Callable[[str, str, float, str, bool], Any]
 
+# Builds the broker-native "list open orders" query. Injected (like ``OrderFactory``) so the
+# alpaca-py import stays lazy and tests can pass a sentinel the stub client ignores.
+OpenOrdersQuery = Callable[[], Any]
+
+
+@dataclass(frozen=True, slots=True)
+class MarketClock:
+    """The exchange clock the scheduler needs: open state + the session boundaries."""
+
+    is_open: bool
+    next_open: datetime
+    next_close: datetime
+
 
 class _TradingClient(Protocol):
     """The minimal Alpaca ``TradingClient`` surface this broker depends on.
@@ -52,6 +67,12 @@ class _TradingClient(Protocol):
         ...
 
     def submit_order(self, order_data: Any) -> Any:
+        ...
+
+    def get_orders(self, filter: Any = None) -> Any:  # noqa: A002 - alpaca-py's param name
+        ...
+
+    def get_clock(self) -> Any:
         ...
 
 
@@ -93,6 +114,14 @@ def _default_order_factory(
     )
 
 
+def _default_open_orders_query() -> Any:
+    """Real Alpaca "list open orders" request — the only place its SDK types are imported."""
+    from alpaca.trading.enums import QueryOrderStatus
+    from alpaca.trading.requests import GetOrdersRequest
+
+    return GetOrdersRequest(status=QueryOrderStatus.OPEN)
+
+
 def _assert_live_allowed(settings: Settings) -> None:
     """Sovereign live guard: raise unless live trading is both requested and confirmed.
 
@@ -121,12 +150,14 @@ class AlpacaBroker:
         live_trading: bool,
         live_confirm: str | None,
         order_factory: OrderFactory = _default_order_factory,
+        open_orders_query: OpenOrdersQuery = _default_open_orders_query,
     ) -> None:
         self._client = client
         self._execution = execution
         self._live_trading = live_trading
         self._live_confirm = live_confirm
         self._order_factory = order_factory
+        self._open_orders_query = open_orders_query
         # Order ids of the most recent submit(), kept for the recorder/audit layer.
         self.last_orders: tuple[str, ...] = ()
 
@@ -179,6 +210,27 @@ class AlpacaBroker:
             buying_power=_to_float(getattr(account, "buying_power", None)),
             positions=positions,
             day_pnl=day_pnl,
+        )
+
+    def open_orders(self) -> tuple[str, ...]:
+        """Symbols with a pending (unfilled) open order — used to avoid stacking duplicates.
+
+        The cycle sizes against *filled* positions only, so without this a re-run while orders
+        are still queued would submit the same buys again. Returns the symbols so the runner can
+        skip them.
+        """
+        orders = self._client.get_orders(filter=self._open_orders_query())
+        symbols = {str(getattr(o, "symbol", "")) for o in orders}
+        symbols.discard("")
+        return tuple(sorted(symbols))
+
+    def market_clock(self) -> MarketClock:
+        """Map Alpaca's exchange clock to ``MarketClock`` (open state + session boundaries)."""
+        clock = self._client.get_clock()
+        return MarketClock(
+            is_open=bool(getattr(clock, "is_open", False)),
+            next_open=clock.next_open,
+            next_close=clock.next_close,
         )
 
     # -- internals --------------------------------------------------------------------
