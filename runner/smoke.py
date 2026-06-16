@@ -15,7 +15,7 @@ from datetime import date
 
 import pandas as pd
 
-from broker import SimulatedBroker
+from broker import SimulatedBroker, build_alpaca_broker
 from core.config import (
     BrokerConfig,
     ScreenConfig,
@@ -68,6 +68,7 @@ def main() -> int:
     _smoke_signals(log)
     _smoke_strategy(log)
     _smoke_broker(log)
+    _smoke_alpaca(settings, log)
     _smoke_engine(settings, log)
 
     # Tiny end-to-end exercise of the sovereign gate: a sane buy, an oversized buy that
@@ -231,6 +232,23 @@ def _smoke_broker(log: logging.Logger) -> None:
     state = broker.account_state()
     log.info("broker | post-fill cash=%.2f equity=%.2f day_pnl=%.2f",
              state.cash, state.equity, state.day_pnl)
+
+
+def _smoke_alpaca(settings: Settings, log: logging.Logger) -> None:
+    """Hit the Alpaca paper account when keys are set; otherwise log a graceful skip.
+
+    Builds the live/paper broker (always paper unless LIVE_TRADING is confirmed) and prints
+    equity + buying power. Mirrors the TIINGO-key skip pattern; needs network once when keyed.
+    """
+    if not (settings.alpaca_api_key and settings.alpaca_secret_key):
+        log.info("alpaca | no ALPACA_API_KEY/ALPACA_SECRET_KEY set - skipping paper account")
+        return
+    broker = build_alpaca_broker(settings)
+    account = broker.account_state()
+    log.info(
+        "alpaca | paper account equity=%.2f buying_power=%.2f positions=%d",
+        account.equity, account.buying_power, len(account.positions),
+    )
 
 
 def _smoke_engine(settings: Settings, log: logging.Logger) -> None:
