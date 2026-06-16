@@ -46,6 +46,42 @@ class IngestConfig(BaseModel):
     history_days: int = Field(default=600, gt=0)
 
 
+class ScreenConfig(BaseModel):
+    """User-tunable screen knobs — the user's sole control point over the candidate set.
+
+    Env vars are prefixed ``PAPERHANDS_SCREEN__`` (e.g. ``PAPERHANDS_SCREEN__MIN_PRICE``);
+    list knobs are given as JSON arrays (e.g. ``PAPERHANDS_SCREEN__SECTORS_EXCLUDE=["Energy"]``).
+
+    A market-cap floor is deliberately absent: Tiingo EOD carries no point-in-time
+    shares-outstanding, so any cap filter would be a look-ahead/staleness approximation. The
+    shipped knobs are only those price/volume + static metadata can honestly support.
+    """
+
+    model_config = {"frozen": True}
+
+    # Hard tradeability floors (applied to every symbol, watchlist included).
+    min_avg_dollar_volume: float = Field(default=1e7, ge=0.0)
+    min_price: float = Field(default=5.0, ge=0.0)
+
+    # Sector filter (skipped for watchlist symbols). Empty include = "all sectors".
+    sectors_include: tuple[str, ...] = ()
+    sectors_exclude: tuple[str, ...] = ()
+
+    # Pinned symbols: bypass the sector filter and the top-N cut (but not the hard floors).
+    watchlist: tuple[str, ...] = ()
+
+    # Windows (in bars) for the liquidity and momentum computations.
+    liquidity_window: int = Field(default=20, gt=0)
+    momentum_window: int = Field(default=60, gt=0)
+
+    # Composite ranking: momentum is primary; news relevance only adjusts (default off).
+    momentum_weight: float = 1.0
+    relevance_weight: float = 0.0
+
+    # Hard cap on the ranked candidate set.
+    max_candidates: int = Field(default=20, gt=0)
+
+
 class Settings(BaseSettings):
     """Top-level config. Env vars are prefixed ``PAPERHANDS_``; nested groups use ``__``.
 
@@ -68,6 +104,7 @@ class Settings(BaseSettings):
     risk: RiskParams = Field(default_factory=RiskParams)
     data: DataConfig = Field(default_factory=DataConfig)
     ingest: IngestConfig = Field(default_factory=IngestConfig)
+    screen: ScreenConfig = Field(default_factory=ScreenConfig)
 
     # Secrets — optional here; required by later slices. Read from their standard env names.
     tiingo_api_key: str | None = Field(default=None, alias="TIINGO_API_KEY")

@@ -13,19 +13,26 @@ import logging
 import sys
 from datetime import date
 
-from core.config import Settings, load_settings
+import pandas as pd
+
+from core.config import ScreenConfig, Settings, load_settings
 from core.contracts import (
     AccountState,
     MarketContext,
+    NewsContext,
     Position,
     ProposedOrder,
     ProposedPlan,
+    SymbolMetadata,
 )
 from core.logging import configure_logging, get_logger
 from data import build_data_provider
 from data.base import DataProvider
+from data.frame import COLUMNS, INDEX_NAME
 from ingest import build_snapshot_assembler
+from ingest.snapshot import MarketSnapshot
 from risk import apply_risk_gate
+from screen import screen
 
 
 def main() -> int:
@@ -43,6 +50,7 @@ def main() -> int:
     provider = build_data_provider(settings)
     _smoke_data_provider(provider, settings, log)
     _smoke_ingest(provider, settings, log)
+    _smoke_screen(log)
 
     # Tiny end-to-end exercise of the sovereign gate: a sane buy, an oversized buy that
     # must be clamped, and a junk order that must be rejected.
@@ -99,6 +107,49 @@ def _smoke_ingest(
     account = AccountState(cash=10_000.0, equity=10_000.0, buying_power=10_000.0)
     snapshot = assembler.assemble(["AAPL"], date(2024, 3, 28), account)
     log.info("ingest | snapshot %s", snapshot.summary())
+
+
+def _synthetic_bars(latest_close: float, daily_volume: float, momentum: float) -> pd.DataFrame:
+    """A 100-bar frame with a flat raw close (for liquidity/min-price) and an adj_close that
+    rises by ``momentum`` over the window (for the ROC score)."""
+    n = 100
+    idx = pd.DatetimeIndex(pd.bdate_range("2024-01-01", periods=n), name=INDEX_NAME)
+    start_adj = latest_close / (1.0 + momentum)
+    adj = [start_adj + (latest_close - start_adj) * (i / (n - 1)) for i in range(n)]
+    data = {c: [latest_close] * n for c in COLUMNS}
+    data["volume"] = [daily_volume] * n
+    data["adj_close"] = adj
+    return pd.DataFrame(data, index=idx)
+
+
+def _smoke_screen(log: logging.Logger) -> None:
+    """Run the pure screen over a tiny synthetic snapshot. Offline; always runs."""
+    prices = {
+        "AAA": _synthetic_bars(latest_close=150.0, daily_volume=1_000_000, momentum=0.30),
+        "BBB": _synthetic_bars(latest_close=80.0, daily_volume=2_000_000, momentum=0.10),
+        "CCC": _synthetic_bars(latest_close=40.0, daily_volume=500_000, momentum=0.50),
+        "PENNY": _synthetic_bars(latest_close=2.0, daily_volume=5_000_000, momentum=0.90),
+    }
+    metadata = {
+        "AAA": SymbolMetadata("AAA", "Alpha Co", "Information Technology"),
+        "BBB": SymbolMetadata("BBB", "Beta Co", "Health Care"),
+        "CCC": SymbolMetadata("CCC", "Gamma Co", "Energy"),
+        "PENNY": SymbolMetadata("PENNY", "Penny Co", "Energy"),
+    }
+    news = {"BBB": NewsContext(sentiment=0.5, headline_count=3)}
+    account = AccountState(cash=10_000.0, equity=10_000.0, buying_power=10_000.0)
+    snapshot = MarketSnapshot(
+        as_of=date(2024, 5, 20), prices=prices, account=account, news=news
+    )
+
+    result = screen(snapshot, metadata, ScreenConfig())
+    log.info(
+        "screen | candidates=%d dropped=%d", len(result.candidates), len(result.dropped)
+    )
+    for cand in result.candidates:
+        log.info("  #%d %s score=%.4f [%s]", cand.rank, cand.symbol, cand.score, cand.sector)
+    for symbol, reason in result.dropped:
+        log.info("  dropped %s -> %s", symbol, reason)
 
 
 if __name__ == "__main__":

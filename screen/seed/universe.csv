@@ -1,0 +1,45 @@
+symbol,name,sector,asset_type
+AAPL,Apple Inc.,Information Technology,equity
+MSFT,Microsoft Corporation,Information Technology,equity
+NVDA,NVIDIA Corporation,Information Technology,equity
+AVGO,Broadcom Inc.,Information Technology,equity
+ORCL,Oracle Corporation,Information Technology,equity
+GOOGL,Alphabet Inc.,Communication Services,equity
+META,Meta Platforms Inc.,Communication Services,equity
+NFLX,Netflix Inc.,Communication Services,equity
+DIS,The Walt Disney Company,Communication Services,equity
+AMZN,Amazon.com Inc.,Consumer Discretionary,equity
+TSLA,Tesla Inc.,Consumer Discretionary,equity
+HD,The Home Depot Inc.,Consumer Discretionary,equity
+MCD,McDonald's Corporation,Consumer Discretionary,equity
+PG,The Procter & Gamble Company,Consumer Staples,equity
+KO,The Coca-Cola Company,Consumer Staples,equity
+PEP,PepsiCo Inc.,Consumer Staples,equity
+WMT,Walmart Inc.,Consumer Staples,equity
+COST,Costco Wholesale Corporation,Consumer Staples,equity
+JPM,JPMorgan Chase & Co.,Financials,equity
+BAC,Bank of America Corporation,Financials,equity
+V,Visa Inc.,Financials,equity
+MA,Mastercard Incorporated,Financials,equity
+BRK-B,Berkshire Hathaway Inc.,Financials,equity
+UNH,UnitedHealth Group Incorporated,Health Care,equity
+JNJ,Johnson & Johnson,Health Care,equity
+LLY,Eli Lilly and Company,Health Care,equity
+PFE,Pfizer Inc.,Health Care,equity
+ABBV,AbbVie Inc.,Health Care,equity
+XOM,Exxon Mobil Corporation,Energy,equity
+CVX,Chevron Corporation,Energy,equity
+COP,ConocoPhillips,Energy,equity
+CAT,Caterpillar Inc.,Industrials,equity
+BA,The Boeing Company,Industrials,equity
+HON,Honeywell International Inc.,Industrials,equity
+LIN,Linde plc,Materials,equity
+NEE,NextEra Energy Inc.,Utilities,equity
+DUK,Duke Energy Corporation,Utilities,equity
+AMT,American Tower Corporation,Real Estate,equity
+PLD,Prologis Inc.,Real Estate,equity
+SPY,SPDR S&P 500 ETF Trust,ETF,etf
+QQQ,Invesco QQQ Trust,ETF,etf
+IWM,iShares Russell 2000 ETF,ETF,etf
+DIA,SPDR Dow Jones Industrial Average ETF Trust,ETF,etf
+VTI,Vanguard Total Stock Market ETF,ETF,etf

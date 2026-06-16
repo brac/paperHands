@@ -16,6 +16,7 @@ from typing import Any, Literal
 
 Action = Literal["buy", "sell", "hold"]
 Side = Literal["buy", "sell"]
+AssetType = Literal["equity", "etf"]
 
 
 def _is_finite_number(value: object) -> bool:
@@ -47,6 +48,25 @@ class AccountState:
 
     def position_symbols(self) -> frozenset[str]:
         return frozenset(p.symbol for p in self.positions)
+
+
+@dataclass(frozen=True, slots=True)
+class SymbolMetadata:
+    """Static reference data for a symbol — name, sector, asset type.
+
+    This is ~stable descriptive data (not point-in-time market data), sourced from the
+    universe provider and consumed by the screen for sector filtering. ETFs carry
+    ``sector="ETF"`` and ``asset_type="etf"``.
+    """
+
+    symbol: str
+    name: str
+    sector: str
+    asset_type: AssetType = "equity"
+
+    def to_dict(self) -> dict[str, Any]:
+        """JSON-serializable view."""
+        return asdict(self)
 
 
 @dataclass(frozen=True, slots=True)
