@@ -9,12 +9,28 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import Field
+from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from risk.params import RiskParams
 
 StrategyMode = Literal["rules-only", "llm"]
+DataProviderName = Literal["tiingo"]
+
+
+class DataConfig(BaseModel):
+    """Historical data provider + local cache settings.
+
+    Env vars: ``PAPERHANDS_DATA__PROVIDER``, ``PAPERHANDS_DATA__CACHE_DIR``,
+    ``PAPERHANDS_DATA__TIINGO_BASE_URL``. Only Tiingo is implemented this slice; the
+    ``provider`` field is the swappable seam for Polygon later.
+    """
+
+    model_config = {"frozen": True}
+
+    provider: DataProviderName = "tiingo"
+    cache_dir: str = "data_cache"
+    tiingo_base_url: str = "https://api.tiingo.com"
 
 
 class Settings(BaseSettings):
@@ -37,6 +53,7 @@ class Settings(BaseSettings):
     strategy_mode: StrategyMode = "rules-only"
 
     risk: RiskParams = Field(default_factory=RiskParams)
+    data: DataConfig = Field(default_factory=DataConfig)
 
     # Secrets — optional here; required by later slices. Read from their standard env names.
     tiingo_api_key: str | None = Field(default=None, alias="TIINGO_API_KEY")

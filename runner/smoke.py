@@ -1,17 +1,19 @@
-"""Smoke entrypoint for the scaffold + risk-gate slice.
+"""Smoke entrypoint.
 
-Loads config, configures logging, exercises the sovereign risk gate on a tiny in-memory
-example (no network, no provider yet), and exits 0. The fuller spec smoke that *fetches a
-symbol's history* arrives with the Data Provider slice, since no provider exists yet.
+Loads config, configures logging, exercises the data provider (a real Tiingo fetch when a
+key is configured, else a graceful skip), exercises the sovereign risk gate on a tiny
+in-memory example, and exits 0.
 
     python -m runner.smoke
 """
 
 from __future__ import annotations
 
+import logging
 import sys
+from datetime import date
 
-from core.config import load_settings
+from core.config import Settings, load_settings
 from core.contracts import (
     AccountState,
     MarketContext,
@@ -20,6 +22,7 @@ from core.contracts import (
     ProposedPlan,
 )
 from core.logging import configure_logging, get_logger
+from data import build_data_provider
 from risk import apply_risk_gate
 
 
@@ -29,11 +32,13 @@ def main() -> int:
     log = get_logger("runner.smoke")
 
     log.info(
-        "config loaded | strategy_mode=%s max_position_pct=%s max_positions=%s",
+        "config loaded | strategy_mode=%s data_provider=%s max_position_pct=%s",
         settings.strategy_mode,
+        settings.data.provider,
         settings.risk.max_position_pct,
-        settings.risk.max_positions,
     )
+
+    _smoke_data_provider(settings, log)
 
     # Tiny end-to-end exercise of the sovereign gate: a sane buy, an oversized buy that
     # must be clamped, and a junk order that must be rejected.
@@ -59,6 +64,23 @@ def main() -> int:
 
     log.info("smoke OK")
     return 0
+
+
+def _smoke_data_provider(settings: Settings, log: logging.Logger) -> None:
+    """Fetch one symbol when a Tiingo key is configured; otherwise log a graceful skip."""
+    provider = build_data_provider(settings)
+    if not settings.tiingo_api_key:
+        log.info("data provider | no TIINGO_API_KEY set - skipping live fetch")
+        return
+    symbol = "AAPL"
+    bars = provider.get_daily_bars(symbol, date(2024, 1, 1), date(2024, 3, 31))
+    if len(bars):
+        log.info(
+            "data provider | %s: %d bars %s..%s",
+            symbol, len(bars), bars.index.min().date(), bars.index.max().date(),
+        )
+    else:
+        log.info("data provider | %s: no bars returned for range", symbol)
 
 
 if __name__ == "__main__":
