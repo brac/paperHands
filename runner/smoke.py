@@ -42,6 +42,7 @@ from data.frame import COLUMNS, INDEX_NAME
 from engine import build_engine
 from ingest import build_snapshot_assembler
 from ingest.snapshot import MarketSnapshot
+from record import format_report, record_run
 from risk import apply_risk_gate
 from screen import screen
 from signals import compute_signals
@@ -237,12 +238,16 @@ def _smoke_engine(settings: Settings, log: logging.Logger) -> None:
     if not settings.tiingo_api_key:
         log.info("engine | no TIINGO_API_KEY set - skipping backtest")
         return
+    provider = build_data_provider(settings)
     engine = build_engine(settings)
     result = engine.run(date(2024, 1, 1), date(2024, 3, 31), universe=["AAPL", "MSFT"])
     log.info(
         "engine | backtest steps=%d bars=%d fills=%d final_equity=%.2f",
         len(result.steps), len(result.equity_curve), len(result.fills), result.final_equity(),
     )
+    summary = record_run(result, provider, settings)
+    for line in format_report(summary).splitlines():
+        log.info("record | %s", line)
 
 
 def _fmt(value: float | None) -> str:

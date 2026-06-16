@@ -156,6 +156,14 @@ class EngineConfig(BaseModel):
     adv_window: int = Field(default=20, gt=0)
 
 
+class RecordConfig(BaseModel):
+    """Result-persistence settings (env-prefixed ``PAPERHANDS_RECORD__``)."""
+
+    model_config = {"frozen": True}
+
+    db_path: str = "results.sqlite"
+
+
 class Settings(BaseSettings):
     """Top-level config. Env vars are prefixed ``PAPERHANDS_``; nested groups use ``__``.
 
@@ -183,6 +191,7 @@ class Settings(BaseSettings):
     strategy: StrategyConfig = Field(default_factory=StrategyConfig)
     broker: BrokerConfig = Field(default_factory=BrokerConfig)
     engine: EngineConfig = Field(default_factory=EngineConfig)
+    record: RecordConfig = Field(default_factory=RecordConfig)
 
     # Secrets — optional here; required by later slices. Read from their standard env names.
     tiingo_api_key: str | None = Field(default=None, alias="TIINGO_API_KEY")
