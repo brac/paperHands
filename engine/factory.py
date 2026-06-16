@@ -5,15 +5,25 @@ from __future__ import annotations
 from broker.simulated import SimulatedBroker
 from core.config import Settings
 from data import build_data_provider
+from data.base import DataProvider
 from engine.engine import BacktestEngine
 from ingest import build_snapshot_assembler
 from screen import build_universe_provider
 from strategy import LLMClient, build_strategy_context
 
 
-def build_engine(settings: Settings, *, llm_client: LLMClient | None = None) -> BacktestEngine:
-    """Construct a fully-wired BacktestEngine from settings (+ an optional LLM client)."""
-    provider = build_data_provider(settings)
+def build_engine(
+    settings: Settings,
+    *,
+    provider: DataProvider | None = None,
+    llm_client: LLMClient | None = None,
+) -> BacktestEngine:
+    """Construct a fully-wired BacktestEngine from settings (+ an optional LLM client).
+
+    A ``provider`` may be passed to share one data provider (and its warm cache) across many
+    engines — e.g. a multi-window evaluation. Each call still gets a fresh ``SimulatedBroker``.
+    """
+    provider = provider or build_data_provider(settings)
     return BacktestEngine(
         provider,
         build_snapshot_assembler(settings, provider),

@@ -1,21 +1,26 @@
 """Local parquet cache for fetched daily bars.
 
 One parquet file per symbol under ``{cache_dir}/tiingo/{SYMBOL}.parquet``, plus a small
-``{SYMBOL}.coverage.json`` sidecar recording the **fetched calendar range**. Coverage is
+``{SYMBOL}.coverage.json`` sidecar recording the **fetched calendar ranges**. Coverage is
 tracked separately from the bar data because the data alone can't distinguish "no bar on
 Jan 1 (a holiday)" from "Jan 1 was never fetched" — so a calendar-range request would never
 register as a hit if we keyed off the first/last bar date. The sidecar is the authoritative
 answer to "do we already have this span?", which is what guarantees a second identical run
 reads from cache without network.
 
+Coverage is a list of **merged intervals**, not a single hull: fetching two *disjoint* date
+ranges (e.g. a 2020 window and a 2024 window) must NOT make the gap between them look cached.
+A request is a hit only if a single contiguous interval brackets it.
+
 ``store`` merges new rows with existing ones (deduping by date, new rows win) and unions the
-coverage span, so repeated backtests over overlapping ranges converge to one complete history.
+fetched interval into the coverage list, so repeated backtests over overlapping ranges
+converge to one complete history.
 """
 
 from __future__ import annotations
 
 import json
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 import pandas as pd
@@ -74,24 +79,33 @@ class ParquetBarCache:
         merged.to_parquet(self._path(symbol))
         self._memo[symbol.upper()] = merged  # keep the memo consistent with disk
 
-        lo, hi = self._coverage(symbol)
-        new_lo = fetched_start if lo is None else min(lo, fetched_start)
-        new_hi = fetched_end if hi is None else max(hi, fetched_end)
+        intervals = _merge_intervals([*self._intervals(symbol), (fetched_start, fetched_end)])
         self._coverage_path(symbol).write_text(
-            json.dumps({"start": new_lo.isoformat(), "end": new_hi.isoformat()})
+            json.dumps([{"start": lo.isoformat(), "end": hi.isoformat()} for lo, hi in intervals])
         )
         return merged
 
     def covers(self, symbol: str, start: date, end: date) -> bool:
-        """True if the fetched coverage span brackets [start, end] (a hit needs no fetch)."""
-        lo, hi = self._coverage(symbol)
-        if lo is None or hi is None:
-            return False
-        return lo <= start and hi >= end
+        """True if a single fetched interval brackets [start, end] (a hit needs no fetch)."""
+        return any(lo <= start and hi >= end for lo, hi in self._intervals(symbol))
 
-    def _coverage(self, symbol: str) -> tuple[date | None, date | None]:
+    def _intervals(self, symbol: str) -> list[tuple[date, date]]:
         path = self._coverage_path(symbol)
         if not path.exists():
-            return None, None
+            return []
         rec = json.loads(path.read_text())
-        return date.fromisoformat(rec["start"]), date.fromisoformat(rec["end"])
+        # Back-compat: an old single-hull ``{start, end}`` is read as one interval.
+        rows = [rec] if isinstance(rec, dict) else rec
+        return [(date.fromisoformat(r["start"]), date.fromisoformat(r["end"])) for r in rows]
+
+
+def _merge_intervals(intervals: list[tuple[date, date]]) -> list[tuple[date, date]]:
+    """Sort and merge overlapping/adjacent (touching within a day) date intervals."""
+    ordered = sorted(intervals)
+    merged: list[tuple[date, date]] = []
+    for lo, hi in ordered:
+        if merged and lo <= merged[-1][1] + timedelta(days=1):
+            merged[-1] = (merged[-1][0], max(merged[-1][1], hi))
+        else:
+            merged.append((lo, hi))
+    return merged

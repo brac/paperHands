@@ -43,14 +43,24 @@ def test_merge_dedupes_by_date_new_wins(tmp_path):
     assert merged.loc[pd.Timestamp("2024-01-03"), "close"] == 999.0  # new row wins
 
 
-def test_coverage_union(tmp_path):
+def test_disjoint_intervals_do_not_cover_the_gap(tmp_path):
     cache = ParquetBarCache(tmp_path)
     cache.store("AAA", _frame(["2024-01-02"]), date(2024, 1, 1), date(2024, 1, 10))
     cache.store("AAA", _frame(["2024-02-01"]), date(2024, 1, 20), date(2024, 2, 5))
-    # Union of [Jan1,Jan10] and [Jan20,Feb5] brackets a sub-range within the hull.
-    assert cache.covers("AAA", date(2024, 1, 5), date(2024, 2, 1))
-    # ...but not beyond the hull.
+    # Each fetched interval is a hit on its own...
+    assert cache.covers("AAA", date(2024, 1, 2), date(2024, 1, 8))
+    assert cache.covers("AAA", date(2024, 1, 21), date(2024, 2, 3))
+    # ...but a range spanning the un-fetched gap (Jan 10 .. Jan 20) is NOT covered.
+    assert not cache.covers("AAA", date(2024, 1, 5), date(2024, 2, 1))
     assert not cache.covers("AAA", date(2024, 1, 5), date(2024, 3, 1))
+
+
+def test_overlapping_intervals_merge(tmp_path):
+    cache = ParquetBarCache(tmp_path)
+    cache.store("AAA", _frame(["2024-01-02"]), date(2024, 1, 1), date(2024, 1, 15))
+    cache.store("AAA", _frame(["2024-01-20"]), date(2024, 1, 10), date(2024, 1, 31))
+    # Overlapping fetches merge into one interval that brackets the whole span.
+    assert cache.covers("AAA", date(2024, 1, 5), date(2024, 1, 28))
 
 
 def test_covers_false_when_uncached(tmp_path):
