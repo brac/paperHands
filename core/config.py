@@ -180,6 +180,20 @@ class ExecConfig(BaseModel):
     fractional: bool = True
 
 
+class ScheduleConfig(BaseModel):
+    """Scheduler cadence (env-prefixed ``PAPERHANDS_SCHEDULE__``).
+
+    ``runner.schedule`` runs one cycle per trading session, gated by Alpaca's market clock.
+    ``open_offset_minutes`` delays the run past the open so first-minute data settles;
+    ``poll_seconds`` bounds how long the loop sleeps between clock checks while it waits.
+    """
+
+    model_config = {"frozen": True}
+
+    open_offset_minutes: int = Field(default=5, ge=0)
+    poll_seconds: int = Field(default=300, gt=0)
+
+
 class Settings(BaseSettings):
     """Top-level config. Env vars are prefixed ``PAPERHANDS_``; nested groups use ``__``.
 
@@ -209,6 +223,7 @@ class Settings(BaseSettings):
     engine: EngineConfig = Field(default_factory=EngineConfig)
     record: RecordConfig = Field(default_factory=RecordConfig)
     execution: ExecConfig = Field(default_factory=ExecConfig)
+    schedule: ScheduleConfig = Field(default_factory=ScheduleConfig)
 
     # Secrets — optional here; required by later slices. Read from their standard env names.
     tiingo_api_key: str | None = Field(default=None, alias="TIINGO_API_KEY")
