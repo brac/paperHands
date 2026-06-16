@@ -26,6 +26,14 @@ class Broker(Protocol):
         ...
 
 
+from broker.alpaca import AlpacaBroker, build_alpaca_broker  # noqa: E402
 from broker.simulated import EquityPoint, Fill, SimulatedBroker  # noqa: E402
 
-__all__ = ["Broker", "SimulatedBroker", "Fill", "EquityPoint"]
+__all__ = [
+    "Broker",
+    "SimulatedBroker",
+    "Fill",
+    "EquityPoint",
+    "AlpacaBroker",
+    "build_alpaca_broker",
+]
