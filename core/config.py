@@ -45,6 +45,12 @@ class IngestConfig(BaseModel):
 
     history_days: int = Field(default=600, gt=0)
 
+    # Secondary SEC-EDGAR filings feed (off by default; technicals stay primary regardless).
+    filings_enabled: bool = False
+    filings_recency_days: int = Field(default=5, gt=0)  # an 8-K/Form-4 within N days = "recent"
+    edgar_user_agent: str = ""  # SEC requires a descriptive contact UA; 403 without it
+    edgar_cache_dir: str = "data_cache"
+
 
 class ScreenConfig(BaseModel):
     """User-tunable screen knobs — the user's sole control point over the candidate set.

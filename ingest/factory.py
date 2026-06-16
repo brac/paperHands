@@ -10,6 +10,7 @@ from __future__ import annotations
 from core.config import Settings
 from data.base import DataProvider
 from ingest.assembler import SnapshotAssembler
+from ingest.feeds import FilingsProvider
 
 
 def build_snapshot_assembler(
@@ -17,10 +18,17 @@ def build_snapshot_assembler(
 ) -> SnapshotAssembler:
     """Build the assembler from config + an injected data provider.
 
-    Secondary feeds default to the null stubs (Phase 1); the real EDGAR/FRED/news clients
-    will be passed here when that slice lands.
+    The real SEC-EDGAR filings feed is wired in when ``ingest.filings_enabled`` is set;
+    otherwise filings (and news/macro) default to the null stubs. FRED/news remain deferred.
     """
+    filings: FilingsProvider | None = None
+    if settings.ingest.filings_enabled:
+        from ingest.edgar import build_edgar_filings_provider
+
+        filings = build_edgar_filings_provider(settings)
+
     return SnapshotAssembler(
         data_provider,
+        filings=filings,
         history_days=settings.ingest.history_days,
     )
