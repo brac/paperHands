@@ -100,6 +100,32 @@ class SignalConfig(BaseModel):
     zscore_window: int = Field(default=20, gt=0)
 
 
+class StrategyConfig(BaseModel):
+    """Rules-mode strategy knobs (env-prefixed ``PAPERHANDS_STRATEGY__``).
+
+    The sovereign risk gate enforces hard caps regardless; these only shape the *proposal*.
+    Technicals are primary — news knobs may only boost/lower conviction or veto a buy.
+    """
+
+    model_config = {"frozen": True}
+
+    # Sizing + breadth.
+    max_new_positions: int = Field(default=5, gt=0)
+    max_target_weight: float = Field(default=0.15, gt=0.0, le=1.0)  # <= risk max_position_pct
+
+    # Buy regimes (a buy needs technical support: momentum OR mean-reversion).
+    momentum_buy_threshold: float = 0.0  # roc must exceed this (with trend_strength > 0)
+    zscore_oversold: float = -1.5  # buy when zscore is below this (mean-reversion)
+    rsi_overbought: float = 70.0  # suppress momentum buys when rsi exceeds this
+
+    # Sell rule for held names whose signal turned bearish.
+    sell_threshold: float = 0.0  # sell when roc < this or trend_strength < 0
+
+    # News modulation (secondary; never originates a trade).
+    news_conviction_boost: float = Field(default=0.1, ge=0.0)
+    news_veto_sentiment: float = -0.5  # veto a buy when sentiment <= this
+
+
 class Settings(BaseSettings):
     """Top-level config. Env vars are prefixed ``PAPERHANDS_``; nested groups use ``__``.
 
@@ -124,6 +150,7 @@ class Settings(BaseSettings):
     ingest: IngestConfig = Field(default_factory=IngestConfig)
     screen: ScreenConfig = Field(default_factory=ScreenConfig)
     signals: SignalConfig = Field(default_factory=SignalConfig)
+    strategy: StrategyConfig = Field(default_factory=StrategyConfig)
 
     # Secrets — optional here; required by later slices. Read from their standard env names.
     tiingo_api_key: str | None = Field(default=None, alias="TIINGO_API_KEY")

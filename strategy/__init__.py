@@ -1,23 +1,12 @@
-"""The swappable strategy core: ``propose_plan`` + the LLM client contract.
+"""The swappable strategy core: dual-mode ``propose_plan`` + the injected LLM client.
 
-Interface only in this slice. The dual-mode ``propose_plan`` (rules-only first, llm after)
-arrives with the Strategy slice. The LLM client is injected so it can be stubbed in tests
-and so the same pure ``propose_plan`` runs in backtest, paper, and live.
+The strategy proposes; the sovereign risk gate disposes. ``propose_plan`` is pure except for
+the injected ``LLMClient`` (llm mode only), so the same code runs in backtest, paper, and
+live — no brain fork. Technicals are primary; news/filing flags only modulate or veto.
 """
 
-from __future__ import annotations
+from strategy.client import LLMClient
+from strategy.context import StrategyContext, build_strategy_context
+from strategy.strategy import propose_plan
 
-from typing import Protocol, runtime_checkable
-
-
-@runtime_checkable
-class LLMClient(Protocol):
-    """Minimal contract for the injected LLM. Implementations call the real API; tests stub.
-
-    Returns the model's raw text response; strategy code is responsible for parsing it
-    into a validated plan (or falling back to a safe hold plan).
-    """
-
-    def complete(self, system: str, user: str) -> str:
-        """Return the model's text completion for the given system + user prompt."""
-        ...
+__all__ = ["LLMClient", "StrategyContext", "build_strategy_context", "propose_plan"]

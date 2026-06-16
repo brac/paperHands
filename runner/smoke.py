@@ -15,7 +15,7 @@ from datetime import date
 
 import pandas as pd
 
-from core.config import ScreenConfig, Settings, SignalConfig, load_settings
+from core.config import ScreenConfig, Settings, SignalConfig, StrategyConfig, load_settings
 from core.contracts import (
     AccountState,
     MarketContext,
@@ -34,6 +34,7 @@ from ingest.snapshot import MarketSnapshot
 from risk import apply_risk_gate
 from screen import screen
 from signals import compute_signals
+from strategy import StrategyContext, propose_plan
 
 
 def main() -> int:
@@ -53,6 +54,7 @@ def main() -> int:
     _smoke_ingest(provider, settings, log)
     _smoke_screen(log)
     _smoke_signals(log)
+    _smoke_strategy(log)
 
     # Tiny end-to-end exercise of the sovereign gate: a sane buy, an oversized buy that
     # must be clamped, and a junk order that must be rejected.
@@ -174,6 +176,29 @@ def _smoke_signals(log: logging.Logger) -> None:
             sym,
             _fmt(sig.roc), _fmt(sig.rsi), _fmt(sig.trend_strength),
             _fmt(sig.atr_pct), _fmt(sig.news_sentiment),
+        )
+
+
+def _smoke_strategy(log: logging.Logger) -> None:
+    """Run rules-only propose_plan over a synthetic snapshot. Offline; always runs."""
+    prices = {
+        "AAA": _synthetic_bars(latest_close=150.0, daily_volume=1_000_000, momentum=0.30),
+        "BBB": _synthetic_bars(latest_close=80.0, daily_volume=2_000_000, momentum=-0.10),
+    }
+    account = AccountState(
+        cash=10_000.0, equity=10_000.0, buying_power=10_000.0,
+        positions=(Position("BBB", qty=10.0, avg_price=90.0),),
+    )
+    snapshot = MarketSnapshot(as_of=date(2024, 5, 20), prices=prices, account=account)
+
+    signals = compute_signals(snapshot, ["AAA", "BBB"], SignalConfig())
+    ctx = StrategyContext(mode="rules-only", config=StrategyConfig())
+    plan = propose_plan(signals, account.positions, account.cash, ctx)
+    log.info("strategy (rules-only) | proposed orders=%d", len(plan.orders))
+    for order in plan.orders:
+        log.info(
+            "  %s %s target_weight=%.4f conviction=%.2f (%s)",
+            order.action, order.symbol, order.target_weight, order.conviction, order.reason,
         )
 
 
