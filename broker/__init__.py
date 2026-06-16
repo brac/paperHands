@@ -1,7 +1,9 @@
 """Execution interface shared by SimulatedBroker (backtest) and AlpacaBroker (later).
 
-Interface only in this slice. The simulated broker (next-bar fills, cost model) arrives
-with the Simulated Broker slice; the Alpaca implementation is Phase 2.
+The shared ``Broker`` Protocol is the minimal common surface both backends honor —
+``submit`` + ``account_state``. The simulation-specific driving methods (fill_at_open,
+mark_to_market, equity_curve, fills) live on ``SimulatedBroker`` and are called by the
+backtest engine; the live (Alpaca) runner never ticks. Alpaca is Phase 2.
 """
 
 from __future__ import annotations
@@ -22,3 +24,8 @@ class Broker(Protocol):
     def account_state(self) -> AccountState:
         """Return current cash, equity, buying power, and open positions."""
         ...
+
+
+from broker.simulated import EquityPoint, Fill, SimulatedBroker  # noqa: E402
+
+__all__ = ["Broker", "SimulatedBroker", "Fill", "EquityPoint"]

@@ -15,9 +15,19 @@ from datetime import date
 
 import pandas as pd
 
-from core.config import ScreenConfig, Settings, SignalConfig, StrategyConfig, load_settings
+from broker import SimulatedBroker
+from core.config import (
+    BrokerConfig,
+    ScreenConfig,
+    Settings,
+    SignalConfig,
+    StrategyConfig,
+    load_settings,
+)
 from core.contracts import (
     AccountState,
+    ExecutableOrder,
+    ExecutablePlan,
     MarketContext,
     NewsContext,
     Position,
@@ -55,6 +65,7 @@ def main() -> int:
     _smoke_screen(log)
     _smoke_signals(log)
     _smoke_strategy(log)
+    _smoke_broker(log)
 
     # Tiny end-to-end exercise of the sovereign gate: a sane buy, an oversized buy that
     # must be clamped, and a junk order that must be rejected.
@@ -200,6 +211,23 @@ def _smoke_strategy(log: logging.Logger) -> None:
             "  %s %s target_weight=%.4f conviction=%.2f (%s)",
             order.action, order.symbol, order.target_weight, order.conviction, order.reason,
         )
+
+
+def _smoke_broker(log: logging.Logger) -> None:
+    """Submit a plan, fill it at the next-bar open with costs, mark to market. Offline."""
+    broker = SimulatedBroker(BrokerConfig(starting_cash=10_000.0))
+    plan = ExecutablePlan(orders=(ExecutableOrder("AAA", "buy", qty=10.0, est_price=100.0),))
+    broker.submit(plan)
+    log.info("broker | submitted; pre-fill cash=%.2f positions=%d",
+             broker.account_state().cash, len(broker.account_state().positions))
+    fills = broker.fill_at_open({"AAA": 100.0})  # next-bar open
+    for f in fills:
+        log.info("  filled %s %s qty=%.4f @ %.4f (commission=%.2f)",
+                 f.side, f.symbol, f.qty, f.price, f.commission)
+    broker.mark_to_market(date(2024, 5, 21), {"AAA": 105.0})
+    state = broker.account_state()
+    log.info("broker | post-fill cash=%.2f equity=%.2f day_pnl=%.2f",
+             state.cash, state.equity, state.day_pnl)
 
 
 def _fmt(value: float | None) -> str:

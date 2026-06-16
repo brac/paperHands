@@ -126,6 +126,21 @@ class StrategyConfig(BaseModel):
     news_veto_sentiment: float = -0.5  # veto a buy when sentiment <= this
 
 
+class BrokerConfig(BaseModel):
+    """Simulated-broker settings: starting capital + the execution cost model.
+
+    Env-prefixed ``PAPERHANDS_BROKER__``. Costs are config, never hardcoded. Slippage and
+    spread are in basis points; half the spread is applied to each side of a fill.
+    """
+
+    model_config = {"frozen": True}
+
+    starting_cash: float = Field(default=100_000.0, gt=0.0)
+    slippage_bps: float = Field(default=5.0, ge=0.0)
+    spread_bps: float = Field(default=2.0, ge=0.0)  # full spread; half applied per side
+    commission_per_order: float = Field(default=0.0, ge=0.0)
+
+
 class Settings(BaseSettings):
     """Top-level config. Env vars are prefixed ``PAPERHANDS_``; nested groups use ``__``.
 
@@ -151,6 +166,7 @@ class Settings(BaseSettings):
     screen: ScreenConfig = Field(default_factory=ScreenConfig)
     signals: SignalConfig = Field(default_factory=SignalConfig)
     strategy: StrategyConfig = Field(default_factory=StrategyConfig)
+    broker: BrokerConfig = Field(default_factory=BrokerConfig)
 
     # Secrets — optional here; required by later slices. Read from their standard env names.
     tiingo_api_key: str | None = Field(default=None, alias="TIINGO_API_KEY")
