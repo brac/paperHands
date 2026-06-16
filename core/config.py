@@ -164,12 +164,28 @@ class RecordConfig(BaseModel):
     db_path: str = "results.sqlite"
 
 
+class ExecConfig(BaseModel):
+    """Alpaca execution settings (env-prefixed ``PAPERHANDS_EXECUTION__``).
+
+    The base URLs select the paper vs. live REST endpoint; ``Settings.live_trading`` (guarded
+    by ``LIVE_CONFIRM``) chooses between them. ``time_in_force`` and ``fractional`` shape every
+    submitted order — fractional shares let small target weights translate to honest sizes.
+    """
+
+    model_config = {"frozen": True}
+
+    paper_base_url: str = "https://paper-api.alpaca.markets"
+    live_base_url: str = "https://api.alpaca.markets"
+    time_in_force: str = "day"
+    fractional: bool = True
+
+
 class Settings(BaseSettings):
     """Top-level config. Env vars are prefixed ``PAPERHANDS_``; nested groups use ``__``.
 
     Example: ``PAPERHANDS_RISK__MAX_POSITION_PCT=0.2`` sets ``settings.risk.max_position_pct``.
-    Secret keys (Tiingo, Anthropic) are read from their conventional env names without the
-    prefix and are optional in this slice.
+    Secret keys (Tiingo, Anthropic, Alpaca) are read from their conventional env names without
+    the prefix and are optional in this slice.
     """
 
     model_config = SettingsConfigDict(
@@ -192,10 +208,18 @@ class Settings(BaseSettings):
     broker: BrokerConfig = Field(default_factory=BrokerConfig)
     engine: EngineConfig = Field(default_factory=EngineConfig)
     record: RecordConfig = Field(default_factory=RecordConfig)
+    execution: ExecConfig = Field(default_factory=ExecConfig)
 
     # Secrets — optional here; required by later slices. Read from their standard env names.
     tiingo_api_key: str | None = Field(default=None, alias="TIINGO_API_KEY")
     anthropic_api_key: str | None = Field(default=None, alias="ANTHROPIC_API_KEY")
+    alpaca_api_key: str | None = Field(default=None, alias="ALPACA_API_KEY")
+    alpaca_secret_key: str | None = Field(default=None, alias="ALPACA_SECRET_KEY")
+
+    # Live-trading guard: ``live_trading`` selects the live endpoint, but is only honored when
+    # ``live_confirm`` (env ``LIVE_CONFIRM``) equals ``"I_UNDERSTAND"``. Paper is the default.
+    live_trading: bool = Field(default=False, alias="LIVE_TRADING")
+    live_confirm: str | None = Field(default=None, alias="LIVE_CONFIRM")
 
 
 def load_settings() -> Settings:

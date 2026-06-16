@@ -12,10 +12,12 @@ dependencies = [
     "requests>=2.32",
 ]
 
-# Heavier libraries still deferred to the slices that need them: backtrader (engine),
-# anthropic (llm strategy mode).
+# Optional integration libraries live in the extras below: alpaca-py (paper/live execution)
+# and anthropic (llm strategy mode). They are lazy-imported so the package imports without them.
 
 [project.optional-dependencies]
+alpaca = ["alpaca-py>=0.30"]
+llm = ["anthropic>=0.40"]
 dev = [
     "pytest>=8.0",
     "hypothesis>=6.100",
@@ -67,3 +69,13 @@ disallow_untyped_defs = true
 [[tool.mypy.overrides]]
 module = "tests.*"
 disallow_untyped_defs = false
+
+# Optional, lazy-imported SDK (llm strategy mode); may be absent at type-check time.
+[[tool.mypy.overrides]]
+module = "anthropic"
+ignore_missing_imports = true
+
+# Optional, lazy-imported SDK (Alpaca execution); may be absent at type-check time.
+[[tool.mypy.overrides]]
+module = "alpaca.*"
+ignore_missing_imports = true
