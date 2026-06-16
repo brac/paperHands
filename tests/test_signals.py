@@ -13,7 +13,7 @@ from core.contracts import AccountState, FilingFlags, NewsContext
 from data.frame import COLUMNS, INDEX_NAME
 from ingest.snapshot import MarketSnapshot
 from signals import compute_signals
-from signals.indicators import atr, roc, rsi, sma, zscore
+from signals.indicators import atr, dist_from_high, roc, rsi, sma, zscore
 
 _ACCOUNT = AccountState(cash=10_000.0, equity=10_000.0, buying_power=10_000.0)
 
@@ -85,6 +85,12 @@ def test_zscore_flat_is_none():
     assert zscore(_frame([5, 5, 5, 5, 5]), 5) is None
 
 
+def test_dist_from_high_hand_computed():
+    assert dist_from_high(_frame([10, 11, 12, 13, 14]), 5) == pytest.approx(0.0)  # at the high
+    df = _frame([10, 14, 12, 13, 11])  # last 11, window max 14
+    assert dist_from_high(df, 5) == pytest.approx(11 / 14 - 1)
+
+
 def test_indicators_none_on_insufficient_history():
     df = _frame([10, 11, 12])
     assert sma(df, 5) is None
@@ -92,6 +98,7 @@ def test_indicators_none_on_insufficient_history():
     assert rsi(df, 5) is None
     assert atr(df, 5) is None
     assert zscore(df, 5) is None
+    assert dist_from_high(df, 5) is None
 
 
 # --------------------------------------------------------------------------------------

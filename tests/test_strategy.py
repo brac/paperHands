@@ -64,6 +64,29 @@ def test_no_cash_no_buys():
     assert propose_plan({"MOM": _MOM}, [], 0.0, _ctx()).orders == ()
 
 
+# --------------------------------------------------------------------------------------
+# Phase-3 conviction levers (default off -> no-op)
+# --------------------------------------------------------------------------------------
+def test_max_atr_pct_filters_volatile_buy():
+    vol = _sig("VOL", roc=0.10, trend_strength=0.05, rsi=50.0, atr_pct=0.10)
+    # Default config has no vol cap -> the buy goes through.
+    assert [o.symbol for o in propose_plan({"VOL": vol}, [], 10_000.0, _ctx()).orders] == ["VOL"]
+    # With a 5% cap, the 10%-ATR name is filtered out.
+    capped = _ctx(config=StrategyConfig(max_atr_pct=0.05))
+    assert propose_plan({"VOL": vol}, [], 10_000.0, capped).orders == ()
+
+
+def test_high_proximity_weight_downweights_far_from_high():
+    far = _sig("FAR", roc=0.10, trend_strength=0.05, rsi=50.0, dist_from_high=-0.5)
+    # Off by default: dist_from_high is ignored, conviction stays 0.5 (0.10 / 0.20).
+    off = propose_plan({"FAR": far}, [], 10_000.0, _ctx()).orders[0]
+    assert off.conviction == pytest.approx(0.5)
+    # Full weight: conviction *= proximity = 0.5 * (1 + (-0.5)) = 0.5 * 0.5 = 0.25.
+    weighted = _ctx(config=StrategyConfig(high_proximity_weight=1.0))
+    o = propose_plan({"FAR": far}, [], 10_000.0, weighted).orders[0]
+    assert o.conviction == pytest.approx(0.25)
+
+
 def test_max_new_positions_caps_buys_by_conviction():
     signals = {
         "M1": _sig("M1", roc=0.20, trend_strength=0.05),  # conviction 1.0

@@ -98,6 +98,7 @@ class SignalConfig(BaseModel):
     roc_window: int = Field(default=60, gt=0)
     atr_window: int = Field(default=14, gt=0)
     zscore_window: int = Field(default=20, gt=0)
+    high_window: int = Field(default=252, gt=0)  # rolling high for dist_from_high (~52 weeks)
 
 
 class StrategyConfig(BaseModel):
@@ -117,6 +118,10 @@ class StrategyConfig(BaseModel):
     momentum_buy_threshold: float = 0.0  # roc must exceed this (with trend_strength > 0)
     zscore_oversold: float = -1.5  # buy when zscore is below this (mean-reversion)
     rsi_overbought: float = 70.0  # suppress momentum buys when rsi exceeds this
+
+    # Optional conviction levers (Phase 3; default = off, so behavior is unchanged until tuned).
+    max_atr_pct: float | None = Field(default=None, ge=0.0)  # skip buys above this volatility
+    high_proximity_weight: float = Field(default=0.0, ge=0.0, le=1.0)  # blend in dist_from_high
 
     # Sell rule for held names whose signal turned bearish.
     sell_threshold: float = 0.0  # sell when roc < this or trend_strength < 0

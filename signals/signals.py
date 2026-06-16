@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 
 from core.config import SignalConfig
 from core.contracts import FilingFlags
-from signals.indicators import atr, roc, rsi, sma, zscore
+from signals.indicators import atr, dist_from_high, roc, rsi, sma, zscore
 from signals.signalset import SignalSet
 
 if TYPE_CHECKING:
@@ -64,6 +64,7 @@ def compute_signals(
             rsi=rsi(df, config.rsi_window),
             atr_pct=atr_pct,
             zscore=zscore(df, config.zscore_window),
+            dist_from_high=dist_from_high(df, config.high_window),
             recent_8k=filings.recent_8k,
             recent_insider_buy=filings.recent_insider_buy,
             news_sentiment=news.sentiment if news is not None else None,

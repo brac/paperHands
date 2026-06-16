@@ -33,6 +33,14 @@ def _buy_conviction(signal: SignalSet, config: StrategyConfig) -> float | None:
     if not has_technical_support(signal, config):
         return None
 
+    # Volatility filter (off by default): don't buy names whose ATR% exceeds the cap.
+    if (
+        config.max_atr_pct is not None
+        and signal.atr_pct is not None
+        and signal.atr_pct > config.max_atr_pct
+    ):
+        return None
+
     momentum = 0.0
     if (
         signal.roc is not None
@@ -51,6 +59,14 @@ def _buy_conviction(signal: SignalSet, config: StrategyConfig) -> float | None:
     conviction = max(momentum, mean_reversion)
     if conviction <= 0.0:
         return None  # support existed but RSI suppressed the only regime
+
+    # Momentum-quality blend (off by default): down-weight names far below their rolling high.
+    if config.high_proximity_weight > 0.0 and signal.dist_from_high is not None:
+        w = config.high_proximity_weight
+        proximity = _clamp01(1.0 + signal.dist_from_high)  # dist in (-1, 0] -> proximity in [0, 1]
+        conviction = _clamp01(conviction * ((1.0 - w) + w * proximity))
+        if conviction <= 0.0:
+            return None
 
     # News is secondary: it may veto or boost, never originate (support already required).
     if signal.news_sentiment is not None and signal.news_sentiment <= config.news_veto_sentiment:

@@ -70,6 +70,22 @@ def atr(df: pd.DataFrame, window: int) -> float | None:
     return _finite(float(true_range.iloc[-window:].mean()))
 
 
+def dist_from_high(df: pd.DataFrame, window: int, column: str = "adj_close") -> float | None:
+    """Proximity to the rolling high: ``value[-1] / max(last window) - 1`` (in ``(-1, 0]``).
+
+    ~0 means the name is at its window high (52 weeks by default) — the classic momentum-quality
+    factor: names near their highs tend to keep winning. ``None`` on short history or a
+    non-positive max.
+    """
+    s = df[column]
+    if window <= 0 or len(s) < window:
+        return None
+    high = float(s.iloc[-window:].max())
+    if high <= 0.0:
+        return None
+    return _finite(float(s.iloc[-1]) / high - 1.0)
+
+
 def zscore(df: pd.DataFrame, window: int, column: str = "adj_close") -> float | None:
     """Mean-reversion z-score: ``(value[-1] - mean) / std`` over ``window`` (sample std)."""
     s = df[column]

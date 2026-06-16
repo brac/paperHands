@@ -30,6 +30,7 @@ class SignalSet:
     rsi: float | None = None
     atr_pct: float | None = None  # ATR / latest close
     zscore: float | None = None
+    dist_from_high: float | None = None  # adj_close / rolling-high - 1 (in (-1, 0]; ~0 = at high)
 
     # Secondary flags (attached from the snapshot; never originate a trade).
     recent_8k: bool = False
