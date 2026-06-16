@@ -82,6 +82,24 @@ class ScreenConfig(BaseModel):
     max_candidates: int = Field(default=20, gt=0)
 
 
+class SignalConfig(BaseModel):
+    """Technical-indicator window knobs (in bars).
+
+    Env vars prefixed ``PAPERHANDS_SIGNALS__`` (e.g. ``PAPERHANDS_SIGNALS__RSI_WINDOW``).
+    Indicators are computed on adjusted prices; a window that exceeds available history
+    yields ``None`` (never NaN), so the output stays JSON-serializable.
+    """
+
+    model_config = {"frozen": True}
+
+    sma_short_window: int = Field(default=20, gt=0)
+    sma_long_window: int = Field(default=50, gt=0)
+    rsi_window: int = Field(default=14, gt=0)
+    roc_window: int = Field(default=60, gt=0)
+    atr_window: int = Field(default=14, gt=0)
+    zscore_window: int = Field(default=20, gt=0)
+
+
 class Settings(BaseSettings):
     """Top-level config. Env vars are prefixed ``PAPERHANDS_``; nested groups use ``__``.
 
@@ -105,6 +123,7 @@ class Settings(BaseSettings):
     data: DataConfig = Field(default_factory=DataConfig)
     ingest: IngestConfig = Field(default_factory=IngestConfig)
     screen: ScreenConfig = Field(default_factory=ScreenConfig)
+    signals: SignalConfig = Field(default_factory=SignalConfig)
 
     # Secrets — optional here; required by later slices. Read from their standard env names.
     tiingo_api_key: str | None = Field(default=None, alias="TIINGO_API_KEY")

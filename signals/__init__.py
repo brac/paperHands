@@ -1,4 +1,11 @@
-"""Technical indicator computation (pure functions over price frames).
+"""Technical signal computation: pure indicators + a per-candidate SignalSet.
 
-Skeleton only in this slice; implemented in the Signals slice.
+Public surface: ``compute_signals`` and the ``SignalSet`` contract. Indicators are pure
+functions over canonical bar frames; the SignalSet also carries the secondary news/filing
+flags attached from the snapshot (technicals stay primary).
 """
+
+from signals.signals import compute_signals
+from signals.signalset import SignalSet
+
+__all__ = ["compute_signals", "SignalSet"]

@@ -15,7 +15,7 @@ from datetime import date
 
 import pandas as pd
 
-from core.config import ScreenConfig, Settings, load_settings
+from core.config import ScreenConfig, Settings, SignalConfig, load_settings
 from core.contracts import (
     AccountState,
     MarketContext,
@@ -33,6 +33,7 @@ from ingest import build_snapshot_assembler
 from ingest.snapshot import MarketSnapshot
 from risk import apply_risk_gate
 from screen import screen
+from signals import compute_signals
 
 
 def main() -> int:
@@ -51,6 +52,7 @@ def main() -> int:
     _smoke_data_provider(provider, settings, log)
     _smoke_ingest(provider, settings, log)
     _smoke_screen(log)
+    _smoke_signals(log)
 
     # Tiny end-to-end exercise of the sovereign gate: a sane buy, an oversized buy that
     # must be clamped, and a junk order that must be rejected.
@@ -150,6 +152,33 @@ def _smoke_screen(log: logging.Logger) -> None:
         log.info("  #%d %s score=%.4f [%s]", cand.rank, cand.symbol, cand.score, cand.sector)
     for symbol, reason in result.dropped:
         log.info("  dropped %s -> %s", symbol, reason)
+
+
+def _smoke_signals(log: logging.Logger) -> None:
+    """Compute indicators over a tiny synthetic snapshot. Offline; always runs."""
+    prices = {
+        "AAA": _synthetic_bars(latest_close=150.0, daily_volume=1_000_000, momentum=0.30),
+        "BBB": _synthetic_bars(latest_close=80.0, daily_volume=2_000_000, momentum=-0.10),
+    }
+    news = {"AAA": NewsContext(sentiment=0.4, headline_count=2)}
+    account = AccountState(cash=10_000.0, equity=10_000.0, buying_power=10_000.0)
+    snapshot = MarketSnapshot(
+        as_of=date(2024, 5, 20), prices=prices, account=account, news=news
+    )
+
+    signals = compute_signals(snapshot, ["AAA", "BBB"], SignalConfig())
+    log.info("signals | computed=%d", len(signals))
+    for sym, sig in signals.items():
+        log.info(
+            "  %s roc=%s rsi=%s trend=%s atr_pct=%s news=%s",
+            sym,
+            _fmt(sig.roc), _fmt(sig.rsi), _fmt(sig.trend_strength),
+            _fmt(sig.atr_pct), _fmt(sig.news_sentiment),
+        )
+
+
+def _fmt(value: float | None) -> str:
+    return "None" if value is None else f"{value:.4f}"
 
 
 if __name__ == "__main__":
