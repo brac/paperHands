@@ -22,6 +22,7 @@ from datetime import date
 
 from broker import Broker, build_alpaca_broker
 from core.config import Settings, load_settings
+from core.contracts import ExecutablePlan
 from core.logging import configure_logging, get_logger
 from data import build_data_provider
 from data.base import DataProvider
@@ -102,12 +103,23 @@ def run_cycle(
         _log.error("cycle aborted before submit | %s: %s", type(exc).__name__, exc)
         raise
 
-    # 7. Submit (skipped on dry_run) — never submit on a failed/empty plan.
+    # 7. Submit (skipped on dry_run) — never submit on a failed/empty plan, and never stack a
+    #    duplicate on a symbol that already has a pending open order (the gate sizes against
+    #    *filled* positions only, so a re-run while orders are queued would otherwise re-buy).
     if dry_run:
         _log.info("submit | dry_run -> skipping broker submit")
     elif gated.orders:
-        broker.submit(gated)
-        _log.info("submit | sent %d order(s) to broker", len(gated.orders))
+        pending = set(broker.open_orders())
+        clear = tuple(o for o in gated.orders if o.symbol not in pending)
+        skipped = sorted({o.symbol for o in gated.orders} & pending)
+        if skipped:
+            _log.warning("submit | skipping %d symbol(s) with pending open orders: %s",
+                         len(skipped), ", ".join(skipped))
+        if clear:
+            broker.submit(ExecutablePlan(orders=clear, rejected=gated.rejected))
+            _log.info("submit | sent %d order(s) to broker", len(clear))
+        else:
+            _log.info("submit | all approved orders had pending open orders -> nothing sent")
     else:
         _log.info("submit | no approved orders -> nothing to submit")
 

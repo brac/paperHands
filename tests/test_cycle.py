@@ -61,12 +61,16 @@ class _StubProvider:
 class _StubBroker:
     """A ``Broker`` with a canned account and a recording ``submit`` (no network)."""
 
-    def __init__(self, account: AccountState) -> None:
+    def __init__(self, account: AccountState, open_orders: tuple[str, ...] = ()) -> None:
         self._account = account
+        self._open_orders = open_orders
         self.submitted: list[ExecutablePlan] = []
 
     def account_state(self) -> AccountState:
         return self._account
+
+    def open_orders(self) -> tuple[str, ...]:
+        return self._open_orders
 
     def submit(self, plan: ExecutablePlan) -> None:
         self.submitted.append(plan)
@@ -122,6 +126,35 @@ def test_normal_run_submits_the_gated_plan(tmp_path):
     recorded = store.load_cycle(cycle_id)
     assert broker.submitted[0].orders == recorded.gated.orders
     assert len(recorded.gated.orders) >= 1  # strong momentum + cash -> at least one buy
+
+
+def test_guard_skips_only_symbols_with_pending_open_orders(tmp_path):
+    # Two trending names; AAPL already has a pending open order -> only MSFT should be sent.
+    broker = _StubBroker(_account(), open_orders=("AAPL",))
+    provider = _StubProvider(_synthetic_bars(150.0, 5_000_000, trending=True))
+    store = CycleStore(tmp_path / "cycles.sqlite")
+
+    cycle_id = run_cycle(
+        _settings(), as_of=_AS_OF, universe=["AAPL", "MSFT"],
+        broker=broker, provider=provider, store=store,
+    )
+
+    assert len(broker.submitted) == 1
+    sent = {o.symbol for o in broker.submitted[0].orders}
+    assert "AAPL" not in sent and "MSFT" in sent
+    # The full gated plan (incl. AAPL) is still recorded for the audit trail.
+    assert "AAPL" in {o.symbol for o in store.load_cycle(cycle_id).gated.orders}
+
+
+def test_guard_all_conflicting_sends_nothing_but_records(tmp_path):
+    broker = _StubBroker(_account(), open_orders=("AAPL",))
+    provider = _StubProvider(_synthetic_bars(150.0, 5_000_000, trending=True))
+    store = CycleStore(tmp_path / "cycles.sqlite")
+
+    cycle_id = _run(broker, provider, store, dry_run=False)
+
+    assert broker.submitted == []  # AAPL was the only candidate and it had a pending order
+    assert len(store.load_cycle(cycle_id).gated.orders) >= 1  # still recorded
 
 
 def test_no_orders_means_no_submit(tmp_path):
