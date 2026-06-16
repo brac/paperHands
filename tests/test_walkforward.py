@@ -95,4 +95,5 @@ def test_format_handles_failed_and_empty():
     failed = _result(WindowOutcome(_win("wf-001"), error="RuntimeError: boom"))
     text = format_walkforward(failed)
     assert "FAILED" in text
+    assert "RuntimeError: boom" in text  # the reason is surfaced in the row
     assert "no successful windows" in text

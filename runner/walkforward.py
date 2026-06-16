@@ -88,9 +88,10 @@ def format_walkforward(result: EvaluationResult) -> str:
                 f"{_pct(s.excess_return):>12}{s.portfolio_stats.sharpe:>10.2f}"
             )
         else:
+            reason = (o.error or "").splitlines()[0][:48] if o.error else ""
             lines.append(
                 f"{o.window.label:10}{o.window.start.isoformat():12}{o.window.end.isoformat():12}"
-                f"{'FAILED':>22}"
+                f"  FAILED: {reason}"
             )
 
     summaries = [o.summary for o in result.outcomes if o.summary is not None]
