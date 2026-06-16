@@ -23,6 +23,8 @@ from core.contracts import (
 )
 from core.logging import configure_logging, get_logger
 from data import build_data_provider
+from data.base import DataProvider
+from ingest import build_snapshot_assembler
 from risk import apply_risk_gate
 
 
@@ -38,7 +40,9 @@ def main() -> int:
         settings.risk.max_position_pct,
     )
 
-    _smoke_data_provider(settings, log)
+    provider = build_data_provider(settings)
+    _smoke_data_provider(provider, settings, log)
+    _smoke_ingest(provider, settings, log)
 
     # Tiny end-to-end exercise of the sovereign gate: a sane buy, an oversized buy that
     # must be clamped, and a junk order that must be rejected.
@@ -66,9 +70,10 @@ def main() -> int:
     return 0
 
 
-def _smoke_data_provider(settings: Settings, log: logging.Logger) -> None:
+def _smoke_data_provider(
+    provider: DataProvider, settings: Settings, log: logging.Logger
+) -> None:
     """Fetch one symbol when a Tiingo key is configured; otherwise log a graceful skip."""
-    provider = build_data_provider(settings)
     if not settings.tiingo_api_key:
         log.info("data provider | no TIINGO_API_KEY set - skipping live fetch")
         return
@@ -81,6 +86,19 @@ def _smoke_data_provider(settings: Settings, log: logging.Logger) -> None:
         )
     else:
         log.info("data provider | %s: no bars returned for range", symbol)
+
+
+def _smoke_ingest(
+    provider: DataProvider, settings: Settings, log: logging.Logger
+) -> None:
+    """Assemble a point-in-time snapshot when a key is configured; otherwise skip."""
+    if not settings.tiingo_api_key:
+        log.info("ingest | no TIINGO_API_KEY set - skipping snapshot")
+        return
+    assembler = build_snapshot_assembler(settings, provider)
+    account = AccountState(cash=10_000.0, equity=10_000.0, buying_power=10_000.0)
+    snapshot = assembler.assemble(["AAPL"], date(2024, 3, 28), account)
+    log.info("ingest | snapshot %s", snapshot.summary())
 
 
 if __name__ == "__main__":

@@ -16,6 +16,10 @@ dist/
 .ruff_cache/
 .hypothesis/
 
+# IDE
+.idea/
+.vscode/
+
 # Data caches (later slices: cached historical bars)
 *.parquet
 *.sqlite

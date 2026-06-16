@@ -50,6 +50,29 @@ class AccountState:
 
 
 @dataclass(frozen=True, slots=True)
+class FilingFlags:
+    """Shallow SEC-filing flags per symbol (secondary signal; technicals stay primary).
+
+    Attached to the snapshot by the ingest layer and consumed by signals. Defaults are the
+    null/quiet state, which is what the Phase-1 stub feeds return.
+    """
+
+    recent_8k: bool = False
+    recent_insider_buy: bool = False  # a recent Form 4 purchase by an insider
+
+
+@dataclass(frozen=True, slots=True)
+class NewsContext:
+    """Shallow news context per symbol (secondary signal only).
+
+    ``sentiment`` is an optional score in [-1, 1]; ``None`` means "no news / unknown".
+    """
+
+    sentiment: float | None = None
+    headline_count: int = 0
+
+
+@dataclass(frozen=True, slots=True)
 class MarketContext:
     """At-decision market facts the gate needs: latest price + liquidity per symbol.
 

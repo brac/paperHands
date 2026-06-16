@@ -33,6 +33,19 @@ class DataConfig(BaseModel):
     tiingo_base_url: str = "https://api.tiingo.com"
 
 
+class IngestConfig(BaseModel):
+    """Snapshot-assembly settings.
+
+    Env var: ``PAPERHANDS_INGEST__HISTORY_DAYS``. ``history_days`` is the calendar lookback
+    of price history attached per symbol; 600 (~415 trading days) gives later signals room
+    for long moving averages.
+    """
+
+    model_config = {"frozen": True}
+
+    history_days: int = Field(default=600, gt=0)
+
+
 class Settings(BaseSettings):
     """Top-level config. Env vars are prefixed ``PAPERHANDS_``; nested groups use ``__``.
 
@@ -54,6 +67,7 @@ class Settings(BaseSettings):
 
     risk: RiskParams = Field(default_factory=RiskParams)
     data: DataConfig = Field(default_factory=DataConfig)
+    ingest: IngestConfig = Field(default_factory=IngestConfig)
 
     # Secrets — optional here; required by later slices. Read from their standard env names.
     tiingo_api_key: str | None = Field(default=None, alias="TIINGO_API_KEY")
