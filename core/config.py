@@ -16,6 +16,7 @@ from risk.params import RiskParams
 
 StrategyMode = Literal["rules-only", "llm"]
 DataProviderName = Literal["tiingo"]
+UniverseSource = Literal["static", "tiingo"]
 
 
 class DataConfig(BaseModel):
@@ -50,6 +51,22 @@ class IngestConfig(BaseModel):
     filings_recency_days: int = Field(default=5, gt=0)  # an 8-K/Form-4 within N days = "recent"
     edgar_user_agent: str = ""  # SEC requires a descriptive contact UA; 403 without it
     edgar_cache_dir: str = "data_cache"
+
+
+class UniverseConfig(BaseModel):
+    """Base-universe source (env-prefixed ``PAPERHANDS_UNIVERSE__``).
+
+    ``static`` is the committed large-cap seed CSV. ``tiingo`` builds a survivorship-aware
+    small-cap universe from Tiingo's supported-tickers list (active + delisted), bounded to
+    ``max_symbols`` by a deterministic, survivorship-neutral selection.
+    """
+
+    model_config = {"frozen": True}
+
+    source: UniverseSource = "static"
+    max_symbols: int = Field(default=750, gt=0)
+    exchanges: tuple[str, ...] = ("NYSE", "NASDAQ", "NYSE MKT", "AMEX")
+    cache_dir: str = "data_cache"
 
 
 class ScreenConfig(BaseModel):
@@ -232,6 +249,7 @@ class Settings(BaseSettings):
 
     risk: RiskParams = Field(default_factory=RiskParams)
     data: DataConfig = Field(default_factory=DataConfig)
+    universe: UniverseConfig = Field(default_factory=UniverseConfig)
     ingest: IngestConfig = Field(default_factory=IngestConfig)
     screen: ScreenConfig = Field(default_factory=ScreenConfig)
     signals: SignalConfig = Field(default_factory=SignalConfig)

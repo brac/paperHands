@@ -75,6 +75,9 @@ class _Universe:
     def metadata_for(self, symbols):
         return {s: self._m[s] for s in symbols if s in self._m}
 
+    def symbols_in_window(self, start, end):  # noqa: ANN001, ANN202
+        return self.symbols()
+
 
 def _engine(
     provider, *, rebalance: int = 1, broker: SimulatedBroker | None = None

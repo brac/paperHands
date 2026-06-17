@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import csv
 from collections.abc import Iterable
+from datetime import date
 from pathlib import Path
 from typing import Protocol, get_args, runtime_checkable
 
@@ -41,6 +42,10 @@ class UniverseProvider(Protocol):
 
     def metadata_for(self, symbols: Iterable[str]) -> dict[str, SymbolMetadata]:
         """Metadata for the requested symbols (silently skips unknown ones)."""
+        ...
+
+    def symbols_in_window(self, start: date, end: date) -> tuple[str, ...]:
+        """Symbols that were listed at some point within ``[start, end]`` (point-in-time)."""
         ...
 
 
@@ -85,8 +90,16 @@ class StaticUniverseProvider:
     def metadata_for(self, symbols: Iterable[str]) -> dict[str, SymbolMetadata]:
         return {s: self._by_symbol[s] for s in symbols if s in self._by_symbol}
 
+    def symbols_in_window(self, start: date, end: date) -> tuple[str, ...]:
+        """The static seed carries no listing dates, so every name is always eligible."""
+        del start, end
+        return self.symbols()
+
 
 def build_universe_provider(settings: Settings) -> UniverseProvider:
-    """Composition-root factory. Only the static seed exists this slice."""
-    del settings  # no config knobs select a universe source yet; static seed is the only one
+    """Composition-root factory; selects the universe source from config (default static seed)."""
+    if settings.universe.source == "tiingo":
+        from screen.tiingo_universe import build_tiingo_universe_provider
+
+        return build_tiingo_universe_provider(settings)
     return StaticUniverseProvider()
