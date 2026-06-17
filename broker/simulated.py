@@ -113,15 +113,26 @@ class SimulatedBroker:
         self._fills.append(fill)
         return fill
 
+    @property
+    def applies_liquidity_cost(self) -> bool:
+        """Whether fills add the liquidity-impact spread (so the engine bothers computing ADV)."""
+        return self._config.liquidity_cost_enabled
+
     # -- Simulation driving (called by the backtest engine) ---------------------------
-    def fill_at_open(self, open_prices: Mapping[str, float]) -> list[Fill]:
-        """Execute the queued orders at this bar's open prices (with costs). Returns fills."""
+    def fill_at_open(
+        self, open_prices: Mapping[str, float], *, adv: Mapping[str, float] | None = None
+    ) -> list[Fill]:
+        """Execute the queued orders at this bar's open prices (with costs). Returns fills.
+
+        ``adv`` (per-symbol average dollar volume) drives the liquidity-impact spread when enabled.
+        """
         fills: list[Fill] = []
         for order in self._pending:
             price = open_prices.get(order.symbol)
             if price is None or not _is_finite_number(price) or price <= 0:
                 continue  # no usable quote -> cannot fill
-            fill = self._execute(order, float(price))
+            extra_bps = self._liquidity_extra_bps(None if adv is None else adv.get(order.symbol))
+            fill = self._execute(order, float(price), extra_bps)
             if fill is not None:
                 fills.append(fill)
         self._pending = ()
@@ -143,8 +154,20 @@ class SimulatedBroker:
         return tuple(self._fills)
 
     # -- internals --------------------------------------------------------------------
-    def _execute(self, order: ExecutableOrder, open_price: float) -> Fill | None:
-        eff = self._effective_price(open_price, order.side)
+    def _liquidity_extra_bps(self, adv_value: float | None) -> float:
+        """Extra spread (bps) for an illiquid fill: ``coef / ADV($M)``, capped. Off -> 0."""
+        cfg = self._config
+        if not cfg.liquidity_cost_enabled:
+            return 0.0
+        if adv_value is None or not _is_finite_number(adv_value) or adv_value <= 0:
+            return cfg.liquidity_max_extra_bps  # unknown/zero liquidity -> worst case
+        extra = cfg.liquidity_impact_coef / (adv_value / 1_000_000.0)
+        return min(extra, cfg.liquidity_max_extra_bps)
+
+    def _execute(
+        self, order: ExecutableOrder, open_price: float, extra_bps: float = 0.0
+    ) -> Fill | None:
+        eff = self._effective_price(open_price, order.side, extra_bps)
         commission = self._config.commission_per_order
 
         if order.side == "buy":
@@ -170,8 +193,8 @@ class SimulatedBroker:
         self._reduce_lot(order.symbol, qty)
         return Fill(order.symbol, "sell", qty, eff, commission)
 
-    def _effective_price(self, open_price: float, side: Side) -> float:
-        edge = (self._config.slippage_bps + self._config.spread_bps / 2.0) / 10_000.0
+    def _effective_price(self, open_price: float, side: Side, extra_bps: float = 0.0) -> float:
+        edge = (self._config.slippage_bps + self._config.spread_bps / 2.0 + extra_bps) / 10_000.0
         return open_price * (1.0 + edge) if side == "buy" else open_price * (1.0 - edge)
 
     def _add_to_lot(self, symbol: str, qty: float, price: float) -> None:

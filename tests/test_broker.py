@@ -147,3 +147,32 @@ def test_open_orders_is_empty():
     b = _broker()
     b.submit(_plan(_buy("AAA", 10.0)))
     assert b.open_orders() == ()
+
+
+def test_liquidity_cost_charges_more_for_illiquid_fills():
+    cfg = dict(
+        liquidity_cost_enabled=True, liquidity_impact_coef=50.0, liquidity_max_extra_bps=200.0)
+    # Low ADV ($1M) -> 50 extra bps; high ADV ($50M) -> 1 extra bp.
+    illiquid = _broker(10_000.0, **cfg)
+    illiquid.submit(_plan(_buy("THIN", 1.0)))
+    p_illiquid = illiquid.fill_at_open({"THIN": 100.0}, adv={"THIN": 1_000_000.0})[0].price
+
+    liquid = _broker(10_000.0, **cfg)
+    liquid.submit(_plan(_buy("DEEP", 1.0)))
+    p_liquid = liquid.fill_at_open({"DEEP": 100.0}, adv={"DEEP": 50_000_000.0})[0].price
+
+    assert p_illiquid > p_liquid > 100.0 * _BUY        # both pay more than the base edge
+    assert p_illiquid == pytest.approx(100.0 * (1.0 + (5.0 + 1.0 + 50.0) / 10_000.0))
+
+
+def test_liquidity_cost_capped_and_off_by_default():
+    # Unknown ADV with the cap engaged -> worst-case extra bps (the cap).
+    capped = _broker(10_000.0, liquidity_cost_enabled=True, liquidity_impact_coef=1e6,
+                     liquidity_max_extra_bps=100.0)
+    capped.submit(_plan(_buy("X", 1.0)))
+    price = capped.fill_at_open({"X": 100.0}, adv={"X": 1.0})[0].price
+    assert price == pytest.approx(100.0 * (1.0 + (5.0 + 1.0 + 100.0) / 10_000.0))
+    # Default config (off): adv is ignored, base edge only.
+    base = _broker(10_000.0)
+    base.submit(_plan(_buy("X", 1.0)))
+    assert base.fill_at_open({"X": 100.0}, adv={"X": 1.0})[0].price == pytest.approx(100.0 * _BUY)

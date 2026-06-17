@@ -82,10 +82,20 @@ class BacktestEngine:
         calendar = [ts.date() for ts in spy.index if ts.date() >= start]
         frames = {s: self._provider.get_daily_bars(s, start, end, as_of=end) for s in symbols}
 
+        # Rolling average dollar volume per symbol — only when fills price in liquidity impact.
+        adv_frames: dict[str, pd.Series] | None = None
+        if self._broker.applies_liquidity_cost:
+            w = self._config.adv_window
+            adv_frames = {
+                s: (frames[s]["close"] * frames[s]["volume"]).rolling(w).mean()
+                for s in symbols if len(frames[s])
+            }
+
         steps: list[StepRecord] = []
         for i, day in enumerate(calendar):
             # 1. Fill orders queued on the previous decision, at this bar's open.
-            self._broker.fill_at_open(self._prices_on(frames, symbols, day, "open"))
+            adv = self._adv_on(adv_frames, day)
+            self._broker.fill_at_open(self._prices_on(frames, symbols, day, "open"), adv=adv)
             self._liquidate_delisted(frames, day)
             account = self._broker.account_state()
 
@@ -122,6 +132,21 @@ class BacktestEngine:
             start=start,
             end=end,
         )
+
+    @staticmethod
+    def _adv_on(
+        adv_frames: Mapping[str, pd.Series] | None, day: date
+    ) -> dict[str, float] | None:
+        """Per-symbol average dollar volume as of ``day`` (last value at-or-before; None if off)."""
+        if adv_frames is None:
+            return None
+        ts = pd.Timestamp(day)
+        out: dict[str, float] = {}
+        for symbol, series in adv_frames.items():
+            value = _to_float(series.asof(ts))
+            if value is not None and value > 0:
+                out[symbol] = value
+        return out
 
     def _liquidate_delisted(self, frames: Mapping[str, pd.DataFrame], day: date) -> None:
         """Force-exit held names whose price data has ended (delisted) at their last close.

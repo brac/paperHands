@@ -174,6 +174,12 @@ class BrokerConfig(BaseModel):
     spread_bps: float = Field(default=2.0, ge=0.0)  # full spread; half applied per side
     commission_per_order: float = Field(default=0.0, ge=0.0)
 
+    # Liquidity-aware costs (default off): extra spread that scales inversely with a name's
+    # average dollar volume, so illiquid small-caps pay realistically more. Capped.
+    liquidity_cost_enabled: bool = False
+    liquidity_impact_coef: float = Field(default=0.0, ge=0.0)  # bps per $1M of ADV (inverse)
+    liquidity_max_extra_bps: float = Field(default=0.0, ge=0.0)  # cap on the extra spread
+
 
 class EngineConfig(BaseModel):
     """Backtest-engine settings (env-prefixed ``PAPERHANDS_ENGINE__``).
