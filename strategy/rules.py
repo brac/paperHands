@@ -8,6 +8,7 @@ identical input yields identical output, so it is safe for bulk historical sweep
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping, Sequence
 
 from core.config import StrategyConfig
@@ -87,6 +88,35 @@ def _is_bearish(signal: SignalSet, config: StrategyConfig) -> bool:
     )
 
 
+def _stop_triggered(signal: SignalSet, position: Position, config: StrategyConfig) -> bool:
+    """True when the held name has fallen past the stop from its entry (off when unset)."""
+    return (
+        config.stop_loss_pct is not None
+        and signal.price is not None
+        and signal.price <= position.avg_price * (1.0 - config.stop_loss_pct)
+    )
+
+
+def _cross_sectional_leaders(
+    candidates: list[tuple[str, float]],
+    signals: Mapping[str, SignalSet],
+    config: StrategyConfig,
+) -> list[tuple[str, float]]:
+    """Keep only the top ``momentum_rank_fraction`` of candidates by relative momentum (roc)."""
+    frac = config.momentum_rank_fraction
+    if frac >= 1.0 or len(candidates) <= 1:
+        return candidates
+    keep = max(1, math.ceil(len(candidates) * frac))
+
+    def _roc(symbol: str) -> float:
+        roc = signals[symbol].roc
+        return roc if roc is not None else float("-inf")
+
+    ranked = sorted(candidates, key=lambda r: (_roc(r[0]), r[0]), reverse=True)
+    leaders = {symbol for symbol, _ in ranked[:keep]}
+    return [c for c in candidates if c[0] in leaders]
+
+
 def rules_propose(
     signals: Mapping[str, SignalSet],
     positions: Sequence[Position],
@@ -103,6 +133,7 @@ def rules_propose(
             conviction = _buy_conviction(signal, config)
             if conviction is not None:
                 candidates.append((symbol, conviction))
+        candidates = _cross_sectional_leaders(candidates, signals, config)  # relative-strength gate
         candidates.sort(key=lambda r: (-r[1], r[0]))  # conviction desc, symbol asc
         candidates = candidates[: config.max_new_positions]
 
@@ -126,14 +157,15 @@ def rules_propose(
         held_signal = signals.get(symbol)
         if held_signal is None:
             continue  # no fresh signal -> hold (do nothing)
-        if _is_bearish(held_signal, config):
+        stopped = _stop_triggered(held_signal, position, config)
+        if _is_bearish(held_signal, config) or stopped:
             orders.append(
                 ProposedOrder(
                     action="sell",
                     symbol=symbol,
                     target_weight=0.0,
                     conviction=0.0,
-                    reason="bearish technicals",
+                    reason="stop loss" if stopped else "bearish technicals",
                 )
             )
 

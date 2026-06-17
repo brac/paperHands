@@ -118,6 +118,31 @@ def test_held_without_signal_is_left_alone():
     assert propose_plan({}, [Position("GONE", 5.0, 10.0)], 10_000.0, _ctx()).orders == ()
 
 
+def test_cross_sectional_gate_keeps_top_fraction_by_roc():
+    signals = {
+        "M1": _sig("M1", roc=0.20, trend_strength=0.05),
+        "M2": _sig("M2", roc=0.10, trend_strength=0.05),
+        "M3": _sig("M3", roc=0.05, trend_strength=0.05),
+    }
+    # fraction 0.5 of 3 candidates -> keep top 2 by roc; M3 (lowest roc) is dropped.
+    gated = _ctx(config=StrategyConfig(momentum_rank_fraction=0.5))
+    assert {o.symbol for o in propose_plan(signals, [], 10_000.0, gated).orders} == {"M1", "M2"}
+    # Default (1.0) keeps all three.
+    assert len(propose_plan(signals, [], 10_000.0, _ctx()).orders) == 3
+
+
+def test_stop_loss_sells_held_name_past_threshold():
+    # Flat signal (no buy support, not bearish) but price 80 vs entry 100 = -20%.
+    held = _sig("HELD", roc=0.0, trend_strength=0.0, zscore=0.0, price=80.0)
+    pos = [Position("HELD", 10.0, 100.0)]
+    stopped = _ctx(config=StrategyConfig(stop_loss_pct=0.15))
+    plan = propose_plan({"HELD": held}, pos, 10_000.0, stopped)
+    assert [(o.action, o.symbol) for o in plan.orders] == [("sell", "HELD")]
+    assert plan.orders[0].reason == "stop loss"
+    # Off by default: a non-bearish held name is simply held.
+    assert propose_plan({"HELD": held}, pos, 10_000.0, _ctx()).orders == ()
+
+
 def test_determinism():
     signals = {"MOM": _MOM, "MR": _MR}
     a = propose_plan(signals, [], 10_000.0, _ctx())
