@@ -135,6 +135,32 @@ def test_rebalance_cadence():
     assert len(result.steps) == 3  # but decides only on days 0, 2, 4
 
 
+def test_delisted_position_is_force_liquidated():
+    # CAL spans the whole window (drives the calendar); DELIST stops trading on 2023-12-01.
+    cal = _series()
+    delist = _series()
+    delist = delist.loc[delist.index <= pd.Timestamp("2023-12-01")]
+    provider = _FakeProvider({"CAL": cal, "DELIST": delist})
+    broker = SimulatedBroker(BrokerConfig(starting_cash=100_000.0))
+    engine = BacktestEngine(
+        provider,
+        SnapshotAssembler(provider, history_days=600),
+        _Universe([SymbolMetadata("DELIST", "Delist Co", "Technology")]),
+        screen_config=ScreenConfig(),
+        signal_config=SignalConfig(),
+        strategy_ctx=StrategyContext("rules-only", StrategyConfig(rsi_overbought=200.0)),
+        risk_params=RiskParams(),
+        broker=broker,
+        config=EngineConfig(calendar_symbol="CAL", rebalance_every_n_days=1, adv_window=20),
+    )
+    result = engine.run(date(2023, 11, 1), date(2024, 1, 9))
+
+    liquidations = [f for f in result.fills if f.side == "sell" and f.symbol == "DELIST"]
+    assert liquidations, "delisted holding should be force-liquidated"
+    # Position is flat afterward (no phantom holding marked forever).
+    assert "DELIST" not in {p.symbol for p in broker.account_state().positions}
+
+
 def test_costs_applied_buy_pays_up():
     series = _series()
     result = _engine(_FakeProvider({"RISE": series})).run(_START, _END)

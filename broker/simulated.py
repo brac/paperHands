@@ -95,6 +95,24 @@ class SimulatedBroker:
         """No async open orders in simulation — pending plans fill on the next bar's open."""
         return ()
 
+    def liquidate(self, symbol: str, price: float) -> Fill | None:
+        """Force-sell the entire held position at ``price`` (used for delisting exits).
+
+        Realizes the position immediately (no next-bar wait, since a delisted name has no future
+        bar) so the loss is booked and the cash freed — the survivorship-correct behavior.
+        """
+        lot = self._positions.get(symbol)
+        if lot is None or not _is_finite_number(price) or price <= 0:
+            return None
+        eff = self._effective_price(float(price), "sell")
+        commission = self._config.commission_per_order
+        qty = lot.qty
+        self._cash += qty * eff - commission
+        self._reduce_lot(symbol, qty)
+        fill = Fill(symbol, "sell", qty, eff, commission)
+        self._fills.append(fill)
+        return fill
+
     # -- Simulation driving (called by the backtest engine) ---------------------------
     def fill_at_open(self, open_prices: Mapping[str, float]) -> list[Fill]:
         """Execute the queued orders at this bar's open prices (with costs). Returns fills."""

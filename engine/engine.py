@@ -67,7 +67,10 @@ class BacktestEngine:
     def run(
         self, start: date, end: date, universe: Sequence[str] | None = None
     ) -> BacktestResult:
-        symbols = tuple(universe) if universe is not None else self._universe_provider.symbols()
+        symbols = (
+            tuple(universe) if universe is not None
+            else self._universe_provider.symbols_in_window(start, end)
+        )
         metadata = self._universe_provider.metadata_for(symbols)
 
         # The reference frame drives both the trading calendar and the market-regime overlay.
@@ -83,6 +86,7 @@ class BacktestEngine:
         for i, day in enumerate(calendar):
             # 1. Fill orders queued on the previous decision, at this bar's open.
             self._broker.fill_at_open(self._prices_on(frames, symbols, day, "open"))
+            self._liquidate_delisted(frames, day)
             account = self._broker.account_state()
 
             # 2. Decision (as-of-correct), queued for the *next* open.
@@ -118,6 +122,22 @@ class BacktestEngine:
             start=start,
             end=end,
         )
+
+    def _liquidate_delisted(self, frames: Mapping[str, pd.DataFrame], day: date) -> None:
+        """Force-exit held names whose price data has ended (delisted) at their last close.
+
+        Without this, a delisted holding is marked at its last price forever and its cash is
+        never freed — an optimistic survivorship bias. ``frames[sym].index.max() < day`` means
+        the symbol stopped trading before today.
+        """
+        ts = pd.Timestamp(day)
+        for position in self._broker.account_state().positions:
+            df = frames.get(position.symbol)
+            if df is None or not len(df) or df.index.max() >= ts:
+                continue
+            last_close = _to_float(df["close"].iloc[-1])
+            if last_close is not None and last_close > 0:
+                self._broker.liquidate(position.symbol, last_close)
 
     @staticmethod
     def _prices_on(
