@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping, Sequence
-from datetime import date
+from datetime import date, timedelta
 from typing import Protocol, runtime_checkable
 
 import pandas as pd
@@ -71,9 +71,12 @@ class BacktestEngine:
         metadata = self._universe_provider.metadata_for(symbols)
 
         # The reference frame drives both the trading calendar and the market-regime overlay.
+        # Fetch it with pre-window lookback so the regime MA can form on the first decision day;
+        # the trading calendar is still only the in-window dates.
+        regime_lookback = timedelta(days=self._strategy_ctx.config.regime_ma_window * 2 + 10)
         spy = self._provider.get_daily_bars(
-            self._config.calendar_symbol, start, end, as_of=end)
-        calendar = [ts.date() for ts in spy.index]
+            self._config.calendar_symbol, start - regime_lookback, end, as_of=end)
+        calendar = [ts.date() for ts in spy.index if ts.date() >= start]
         frames = {s: self._provider.get_daily_bars(s, start, end, as_of=end) for s in symbols}
 
         steps: list[StepRecord] = []
