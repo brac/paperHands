@@ -103,6 +103,17 @@ def test_sell_bearish_held_name():
     assert [(o.action, o.symbol) for o in plan.orders] == [("sell", "OLD")]
 
 
+def test_regime_filter_drops_buys_but_keeps_sells():
+    from strategy.regime import MarketRegime
+
+    on = _ctx(config=StrategyConfig(regime_filter_enabled=True))
+    risk_off = MarketRegime(risk_on=False)
+    # A momentum buy is suppressed when the market is risk-off and the filter is on...
+    assert propose_plan({"MOM": _MOM}, [], 10_000.0, on, regime=risk_off).orders == ()
+    # ...while the default (no regime passed) is unchanged.
+    assert [o.symbol for o in propose_plan({"MOM": _MOM}, [], 10_000.0, _ctx()).orders] == ["MOM"]
+
+
 def test_held_without_signal_is_left_alone():
     assert propose_plan({}, [Position("GONE", 5.0, 10.0)], 10_000.0, _ctx()).orders == ()
 

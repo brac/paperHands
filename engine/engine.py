@@ -26,7 +26,7 @@ from risk import apply_risk_gate
 from screen import screen
 from screen.universe import UniverseProvider
 from signals import compute_signals
-from strategy import propose_plan
+from strategy import compute_market_regime, propose_plan
 from strategy.context import StrategyContext
 
 
@@ -70,7 +70,10 @@ class BacktestEngine:
         symbols = tuple(universe) if universe is not None else self._universe_provider.symbols()
         metadata = self._universe_provider.metadata_for(symbols)
 
-        calendar = self._trading_calendar(start, end)
+        # The reference frame drives both the trading calendar and the market-regime overlay.
+        spy = self._provider.get_daily_bars(
+            self._config.calendar_symbol, start, end, as_of=end)
+        calendar = [ts.date() for ts in spy.index]
         frames = {s: self._provider.get_daily_bars(s, start, end, as_of=end) for s in symbols}
 
         steps: list[StepRecord] = []
@@ -85,7 +88,13 @@ class BacktestEngine:
                 candidates = tuple(c.symbol for c in screen(
                     snapshot, metadata, self._screen_config).candidates)
                 signals = compute_signals(snapshot, candidates, self._signal_config)
-                raw = propose_plan(signals, account.positions, account.cash, self._strategy_ctx)
+                regime = compute_market_regime(
+                    spy.loc[spy.index <= pd.Timestamp(day)],
+                    ma_window=self._strategy_ctx.config.regime_ma_window,
+                    reference=self._config.calendar_symbol,
+                )
+                raw = propose_plan(
+                    signals, account.positions, account.cash, self._strategy_ctx, regime=regime)
                 held = tuple(p.symbol for p in account.positions)
                 ctx_symbols = tuple(dict.fromkeys(candidates + held))
                 market = build_market_context(snapshot, ctx_symbols, self._config.adv_window)
@@ -106,11 +115,6 @@ class BacktestEngine:
             start=start,
             end=end,
         )
-
-    def _trading_calendar(self, start: date, end: date) -> list[date]:
-        anchor = self._provider.get_daily_bars(
-            self._config.calendar_symbol, start, end, as_of=end)
-        return [ts.date() for ts in anchor.index]
 
     @staticmethod
     def _prices_on(

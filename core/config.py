@@ -129,6 +129,12 @@ class StrategyConfig(BaseModel):
     max_atr_pct: float | None = Field(default=None, ge=0.0)  # skip buys above this volatility
     high_proximity_weight: float = Field(default=0.0, ge=0.0, le=1.0)  # blend in dist_from_high
 
+    # Tier-1 risk overlays (default off/neutral; validated via walk-forward before adoption).
+    regime_filter_enabled: bool = False  # drop new buys when the market is risk-off
+    regime_ma_window: int = Field(default=200, gt=0)  # reference-index MA for risk-on/off
+    momentum_rank_fraction: float = Field(default=1.0, gt=0.0, le=1.0)  # buy only top-frac by roc
+    stop_loss_pct: float | None = Field(default=None, ge=0.0, le=1.0)  # exit a held name past -x%
+
     # Sell rule for held names whose signal turned bearish.
     sell_threshold: float = 0.0  # sell when roc < this or trend_strength < 0
 

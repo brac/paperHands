@@ -18,7 +18,7 @@ from __future__ import annotations
 import argparse
 import sys
 from collections.abc import Sequence
-from datetime import date
+from datetime import date, timedelta
 
 from broker import Broker, build_alpaca_broker
 from core.config import Settings, load_settings
@@ -32,7 +32,14 @@ from record.cycle_store import CycleStore
 from risk import apply_risk_gate
 from screen import build_universe_provider, screen
 from signals import compute_signals
-from strategy import LLMClient, build_anthropic_client, build_strategy_context, propose_plan
+from strategy import (
+    LLMClient,
+    MarketRegime,
+    build_anthropic_client,
+    build_strategy_context,
+    compute_market_regime,
+    propose_plan,
+)
 
 _log = get_logger("runner.cycle")
 
@@ -89,7 +96,10 @@ def run_cycle(
 
         # 5. Strategy proposal (mode from settings; llm client injected only in llm mode).
         ctx = build_strategy_context(settings, llm_client)
-        proposed = propose_plan(signals, account.positions, account.cash, ctx)
+        regime = _market_regime(provider, settings, as_of)
+        _log.info("regime | %s risk_on=%s", regime.reference, regime.risk_on)
+        proposed = propose_plan(
+            signals, account.positions, account.cash, ctx, regime=regime)
         _log.info("strategy (%s) | proposed=%d", ctx.mode, len(proposed.orders))
 
         # 6. Sovereign risk gate over the proposal.
@@ -137,6 +147,16 @@ def run_cycle(
     )
     _log.info("cycle recorded | cycle_id=%s", cycle_id)
     return cycle_id
+
+
+def _market_regime(provider: DataProvider, settings: Settings, as_of: date) -> MarketRegime:
+    """Compute the market regime from an as-of-capped reference-index frame (no look-ahead)."""
+    reference = settings.engine.calendar_symbol
+    lookback = settings.strategy.regime_ma_window * 2 + 10  # trading->calendar-day headroom
+    bars = provider.get_daily_bars(
+        reference, as_of - timedelta(days=lookback), as_of, as_of=as_of)
+    return compute_market_regime(
+        bars, ma_window=settings.strategy.regime_ma_window, reference=reference)
 
 
 def main(argv: list[str] | None = None) -> int:

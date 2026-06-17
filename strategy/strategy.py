@@ -15,6 +15,7 @@ from signals.signalset import SignalSet
 from strategy.context import StrategyContext
 from strategy.guard import enforce_technicals_primary
 from strategy.llm import llm_propose
+from strategy.regime import MarketRegime, enforce_regime
 from strategy.rules import rules_propose
 
 
@@ -23,8 +24,14 @@ def propose_plan(
     positions: Sequence[Position],
     cash: float,
     ctx: StrategyContext,
+    *,
+    regime: MarketRegime | None = None,
 ) -> ProposedPlan:
-    """Produce a ProposedPlan from signals + account state under the configured mode."""
+    """Produce a ProposedPlan from signals + account state under the configured mode.
+
+    ``regime`` is an optional market-trend overlay (computed upstream from the reference index);
+    when the filter is enabled and the market is risk-off, new buys are dropped.
+    """
     if ctx.mode == "llm":
         if ctx.llm_client is None:
             plan = ProposedPlan()  # misconfigured llm mode -> safe empty plan
@@ -33,4 +40,5 @@ def propose_plan(
     else:  # rules-only
         plan = rules_propose(signals, positions, cash, ctx.config)
 
-    return enforce_technicals_primary(plan, signals, ctx.config)
+    plan = enforce_technicals_primary(plan, signals, ctx.config)
+    return enforce_regime(plan, regime, ctx.config)

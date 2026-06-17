@@ -8,13 +8,16 @@ live — no brain fork. Technicals are primary; news/filing flags only modulate 
 from strategy.anthropic_client import AnthropicClient, build_anthropic_client
 from strategy.client import LLMClient
 from strategy.context import StrategyContext, build_strategy_context
+from strategy.regime import MarketRegime, compute_market_regime
 from strategy.strategy import propose_plan
 
 __all__ = [
     "AnthropicClient",
     "LLMClient",
+    "MarketRegime",
     "StrategyContext",
     "build_anthropic_client",
     "build_strategy_context",
+    "compute_market_regime",
     "propose_plan",
 ]
