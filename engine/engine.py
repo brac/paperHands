@@ -76,7 +76,8 @@ class BacktestEngine:
         # The reference frame drives both the trading calendar and the market-regime overlay.
         # Fetch it with pre-window lookback so the regime MA can form on the first decision day;
         # the trading calendar is still only the in-window dates.
-        regime_lookback = timedelta(days=self._strategy_ctx.config.regime_ma_window * 2 + 10)
+        regime_ma_window = self._regime_ma_window()
+        regime_lookback = timedelta(days=regime_ma_window * 2 + 10)
         spy = self._provider.get_daily_bars(
             self._config.calendar_symbol, start - regime_lookback, end, as_of=end)
         calendar = [ts.date() for ts in spy.index if ts.date() >= start]
@@ -102,19 +103,24 @@ class BacktestEngine:
             # 2. Decision (as-of-correct), queued for the *next* open.
             if i % self._config.rebalance_every_n_days == 0:
                 snapshot = self._assembler.assemble(symbols, day, account)
-                candidates = tuple(c.symbol for c in screen(
-                    snapshot, metadata, self._screen_config).candidates)
-                signals = compute_signals(snapshot, candidates, self._signal_config)
+                if self._config.screen_bypass:
+                    candidates = symbols  # the universe IS the candidate set (ETF rebalancer)
+                else:
+                    candidates = tuple(c.symbol for c in screen(
+                        snapshot, metadata, self._screen_config).candidates)
+                # Signals over candidates ∪ held so holdings that left the universe are still
+                # priced (the rebalancer values current weights from SignalSet.price).
+                held = tuple(p.symbol for p in account.positions)
+                signal_symbols = tuple(dict.fromkeys(candidates + held))
+                signals = compute_signals(snapshot, signal_symbols, self._signal_config)
                 regime = compute_market_regime(
                     spy.loc[spy.index <= pd.Timestamp(day)],
-                    ma_window=self._strategy_ctx.config.regime_ma_window,
+                    ma_window=regime_ma_window,
                     reference=self._config.calendar_symbol,
                 )
                 raw = propose_plan(
                     signals, account.positions, account.cash, self._strategy_ctx, regime=regime)
-                held = tuple(p.symbol for p in account.positions)
-                ctx_symbols = tuple(dict.fromkeys(candidates + held))
-                market = build_market_context(snapshot, ctx_symbols, self._config.adv_window)
+                market = build_market_context(snapshot, signal_symbols, self._config.adv_window)
                 gated = apply_risk_gate(raw, account, market, self._risk_params)
                 self._broker.submit(gated)
                 steps.append(StepRecord(
@@ -132,6 +138,13 @@ class BacktestEngine:
             start=start,
             end=end,
         )
+
+    def _regime_ma_window(self) -> int:
+        """MA window for the regime overlay — the rebalancer's own knob in rebalance mode."""
+        ctx = self._strategy_ctx
+        if ctx.mode == "rebalance" and ctx.rebalance is not None:
+            return ctx.rebalance.regime_ma_window
+        return ctx.config.regime_ma_window
 
     @staticmethod
     def _adv_on(

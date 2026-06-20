@@ -12,14 +12,15 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 from core.config import SignalConfig
-from core.contracts import FilingFlags
-from signals.indicators import atr, dist_from_high, roc, rsi, sma, zscore
+from core.contracts import FilingFlags, HypeContext
+from signals.indicators import atr, dist_from_high, roc, rsi, sma, volume_spike, zscore
 from signals.signalset import SignalSet
 
 if TYPE_CHECKING:
     from ingest.snapshot import MarketSnapshot
 
 _NO_FILINGS = FilingFlags()
+_NO_HYPE = HypeContext()
 
 
 def compute_signals(
@@ -53,6 +54,9 @@ def compute_signals(
 
         filings = snapshot.filings.get(symbol) or _NO_FILINGS
         news = snapshot.news.get(symbol)
+        # Exotic hype: the point-in-time price/volume proxy is always computed; the social
+        # fields pass through from a real feed (null until one is wired in a later slice).
+        hype = snapshot.social.get(symbol) or _NO_HYPE
 
         out[symbol] = SignalSet(
             symbol=symbol,
@@ -68,5 +72,9 @@ def compute_signals(
             recent_8k=filings.recent_8k,
             recent_insider_buy=filings.recent_insider_buy,
             news_sentiment=news.sentiment if news is not None else None,
+            volume_spike=volume_spike(df, config.zscore_window),
+            social_score=hype.social_score,
+            trump_mention=hype.trump_mention,
+            reddit_mentions=hype.reddit_mentions,
         )
     return out

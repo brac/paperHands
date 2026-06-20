@@ -141,7 +141,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--step-days", type=int, default=DEFAULT_STEP_DAYS,
                         help=f"days between window starts (default {DEFAULT_STEP_DAYS})")
     parser.add_argument("--universe", help="comma-separated symbols (default: full seed)")
-    parser.add_argument("--mode", choices=["rules-only", "llm"], help="override strategy mode")
+    parser.add_argument(
+        "--mode", choices=["rules-only", "llm", "rebalance"], help="override strategy mode")
     args = parser.parse_args(argv)
 
     settings = load_settings()

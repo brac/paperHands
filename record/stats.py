@@ -51,6 +51,33 @@ def _max_drawdown(equities: Sequence[float]) -> float:
     return worst
 
 
+def realized_pnl_by_fill(fills: Sequence[Fill]) -> list[float]:
+    """Average-cost realized P&L booked at each fill, parallel to ``fills`` (0.0 for buys).
+
+    Walks fills in order maintaining a running average cost per symbol (commission folded into
+    the cost basis on buys, mirroring the broker's ``_Lot``). A sell books
+    ``qty*(price - avg_cost) - commission``; a buy books 0.0. This is what makes a rebalancer's
+    taxable events visible on the check-in dashboard.
+    """
+    avg_cost: dict[str, float] = {}
+    qty_held: dict[str, float] = {}
+    out: list[float] = []
+    for f in fills:
+        if f.side == "buy":
+            prev_qty = qty_held.get(f.symbol, 0.0)
+            prev_cost = avg_cost.get(f.symbol, 0.0)
+            new_qty = prev_qty + f.qty
+            total_basis = prev_qty * prev_cost + f.qty * f.price + f.commission
+            avg_cost[f.symbol] = total_basis / new_qty if new_qty > 0 else f.price
+            qty_held[f.symbol] = new_qty
+            out.append(0.0)
+        else:  # sell — realize against the running average cost
+            cost = avg_cost.get(f.symbol, f.price)
+            out.append(f.qty * (f.price - cost) - f.commission)
+            qty_held[f.symbol] = max(0.0, qty_held.get(f.symbol, 0.0) - f.qty)
+    return out
+
+
 def compute_stats(
     equities: Sequence[float], fills: Sequence[Fill] = ()
 ) -> PerformanceStats:

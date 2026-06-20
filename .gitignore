@@ -20,6 +20,12 @@ dist/
 .idea/
 .vscode/
 
+# Node
+node_modules/
+
+# Local Claude Code settings
+.claude/settings.local.json
+
 # Data caches (later slices: cached historical bars)
 *.parquet
 *.sqlite

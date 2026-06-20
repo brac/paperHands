@@ -93,6 +93,28 @@ class NewsContext:
 
 
 @dataclass(frozen=True, slots=True)
+class HypeContext:
+    """Exotic 'hype' signal per symbol — the YOLO sleeve's secondary feed.
+
+    The honest contrast line's inputs: crowd-attention / social-momentum data. In Slice 1
+    every field is null (the YOLO proxy derives its hype from point-in-time price/volume in
+    ``signals``, which needs no feed); real Truth-Social / Reddit-WSB providers populate these
+    in a later slice, behind the same point-in-time ``SocialProvider`` interface.
+
+    ``social_score`` is an aggregate crowd-attention score (higher = hotter); ``mention_velocity``
+    is the rate-of-change of mentions; ``trump_mention`` flags a same-window Truth-Social post
+    naming the ticker; ``reddit_mentions`` is the WSB mention count; ``social_sentiment`` is an
+    optional score in [-1, 1]. ``None``/falsy means "no data / unknown".
+    """
+
+    social_score: float | None = None
+    mention_velocity: float | None = None
+    trump_mention: bool = False
+    reddit_mentions: int = 0
+    social_sentiment: float | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class MarketContext:
     """At-decision market facts the gate needs: latest price + liquidity per symbol.
 

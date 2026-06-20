@@ -7,7 +7,11 @@ here — nothing is hardcoded.
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
+
+SizingMode = Literal["new-dollars", "target-weight"]
 
 
 class RiskParams(BaseModel):
@@ -26,3 +30,18 @@ class RiskParams(BaseModel):
     # Daily loss limit as a positive fraction of equity. If the session loss exceeds
     # this, only sells/holds are permitted (no new risk).
     daily_loss_limit: float = Field(default=0.05, gt=0.0, le=1.0)
+
+    # --- Buy-sizing semantics (default preserves the legacy alpha-path behavior) ---
+    # "new-dollars": target_weight sizes *new* dollars to deploy (momentum/MR path).
+    # "target-weight": target_weight is the desired *final* fraction; the gate nets it
+    #   against the current holding (delta>0 buys, delta<0 partial-sells). Used by the
+    #   ETF rebalancer so backtest and live size to the same targets.
+    sizing: SizingMode = "new-dollars"
+    # Min trade size (rebalance churn guard). Effective floor on |delta| dollars is
+    # max(min_trade_dollars, min_trade_pct * equity); legs below it are skipped.
+    min_trade_dollars: float = Field(default=0.0, ge=0.0)
+    min_trade_pct: float = Field(default=0.0, ge=0.0, le=1.0)
+    # Max total traded notional (buys + sells) per gate call as a fraction of equity.
+    # None = no cap (a full two-sided rebalance can legitimately exceed 1.0). When set and
+    # exceeded, every sized leg is scaled down proportionally.
+    max_turnover_pct: float | None = Field(default=None, gt=0.0)

@@ -21,7 +21,7 @@ from collections.abc import Sequence
 from datetime import date, timedelta
 
 from broker import Broker, build_alpaca_broker
-from core.config import Settings, load_settings
+from core.config import Settings, apply_mode_requirements, load_settings
 from core.contracts import ExecutablePlan
 from core.logging import configure_logging, get_logger
 from data import build_data_provider
@@ -63,12 +63,18 @@ def run_cycle(
     logged and re-raised *before* submit, so an unsafe/partial plan can never reach the broker.
     """
     as_of = as_of or date.today()
+    settings = apply_mode_requirements(settings)  # rebalance needs target-weight + screen bypass
     provider = provider or build_data_provider(settings)
     broker = broker or build_alpaca_broker(settings)
     assembler = build_snapshot_assembler(settings, provider)
     universe_provider = build_universe_provider(settings)
 
-    symbols = tuple(universe) if universe is not None else universe_provider.symbols()
+    if universe is not None:
+        symbols = tuple(universe)
+    elif settings.strategy_mode == "rebalance":
+        symbols = settings.rebalance.universe()  # the fixed ETF basket
+    else:
+        symbols = universe_provider.symbols()
     metadata = universe_provider.metadata_for(symbols)
     _log.info("cycle start | as_of=%s symbols=%d dry_run=%s", as_of, len(symbols), dry_run)
 
@@ -84,14 +90,20 @@ def run_cycle(
         snapshot = assembler.assemble(symbols, as_of, account)
         _log.info("snapshot | %s", snapshot.summary())
 
-        # 3. Screen -> ranked candidates.
-        candidates = tuple(
-            c.symbol for c in screen(snapshot, metadata, settings.screen).candidates
-        )
-        _log.info("screen | candidates=%d", len(candidates))
+        # 3. Screen -> ranked candidates (bypassed for the fixed-basket rebalancer).
+        if settings.engine.screen_bypass:
+            candidates = symbols  # the universe IS the candidate set
+        else:
+            candidates = tuple(
+                c.symbol for c in screen(snapshot, metadata, settings.screen).candidates
+            )
+        _log.info("screen | candidates=%d bypass=%s",
+                  len(candidates), settings.engine.screen_bypass)
 
-        # 4. Signals over the candidates.
-        signals = compute_signals(snapshot, candidates, settings.signals)
+        # 4. Signals over candidates ∪ held (so holdings that left the universe stay priced).
+        held = tuple(p.symbol for p in account.positions)
+        signal_symbols = tuple(dict.fromkeys(candidates + held))
+        signals = compute_signals(snapshot, signal_symbols, settings.signals)
         _log.info("signals | computed=%d", len(signals))
 
         # 5. Strategy proposal (mode from settings; llm client injected only in llm mode).
@@ -103,9 +115,7 @@ def run_cycle(
         _log.info("strategy (%s) | proposed=%d", ctx.mode, len(proposed.orders))
 
         # 6. Sovereign risk gate over the proposal.
-        held = tuple(p.symbol for p in account.positions)
-        ctx_symbols = tuple(dict.fromkeys(candidates + held))
-        market = build_market_context(snapshot, ctx_symbols, settings.engine.adv_window)
+        market = build_market_context(snapshot, signal_symbols, settings.engine.adv_window)
         gated = apply_risk_gate(proposed, account, market, settings.risk)
         _log.info("risk gate | approved=%d rejected=%d", len(gated.orders), len(gated.rejected))
     except Exception as exc:
@@ -152,18 +162,24 @@ def run_cycle(
 def _market_regime(provider: DataProvider, settings: Settings, as_of: date) -> MarketRegime:
     """Compute the market regime from an as-of-capped reference-index frame (no look-ahead)."""
     reference = settings.engine.calendar_symbol
-    lookback = settings.strategy.regime_ma_window * 2 + 10  # trading->calendar-day headroom
+    # The rebalancer carries its own MA window; the alpha path uses the strategy knob.
+    ma_window = (
+        settings.rebalance.regime_ma_window
+        if settings.strategy_mode == "rebalance"
+        else settings.strategy.regime_ma_window
+    )
+    lookback = ma_window * 2 + 10  # trading->calendar-day headroom
     bars = provider.get_daily_bars(
         reference, as_of - timedelta(days=lookback), as_of, as_of=as_of)
-    return compute_market_regime(
-        bars, ma_window=settings.strategy.regime_ma_window, reference=reference)
+    return compute_market_regime(bars, ma_window=ma_window, reference=reference)
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="runner.cycle", description="Run one live paper-trading cycle and record it."
     )
-    parser.add_argument("--mode", choices=["rules-only", "llm"], help="override strategy mode")
+    parser.add_argument(
+        "--mode", choices=["rules-only", "llm", "rebalance"], help="override strategy mode")
     parser.add_argument("--universe", help="comma-separated symbols (default: full seed)")
     parser.add_argument("--dry-run", action="store_true", help="compute + record but never submit")
     parser.add_argument("--as-of", help="YYYY-MM-DD decision date (default: today)")

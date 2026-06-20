@@ -46,6 +46,8 @@ packages = [
     "engine",
     "record",
     "runner",
+    "dashboard",
+    "legacy",
 ]
 
 [tool.pytest.ini_options]

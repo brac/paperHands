@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from broker.simulated import SimulatedBroker
-from core.config import Settings
+from core.config import Settings, apply_mode_requirements
 from data import build_data_provider
 from data.base import DataProvider
 from engine.engine import BacktestEngine
@@ -23,6 +23,7 @@ def build_engine(
     A ``provider`` may be passed to share one data provider (and its warm cache) across many
     engines — e.g. a multi-window evaluation. Each call still gets a fresh ``SimulatedBroker``.
     """
+    settings = apply_mode_requirements(settings)  # rebalance needs target-weight + screen bypass
     provider = provider or build_data_provider(settings)
     return BacktestEngine(
         provider,

@@ -1,17 +1,19 @@
 # PaperHands
 
-A self-benchmarking algorithmic trading experiment. See `docs/PROJECT.md` for the project
-bible and `docs/PHASE1_SPEC_backtest.md` for the active phase (the backtest harness).
+A self-benchmarking, honest trading system. See `docs/PROJECT.md` for the project bible.
 
-> **North star:** answer *"does this strategy have edge?"* on history before risking a
-> cent. Process edge over information edge. The risk gate is sovereign — the strategy
-> proposes, the deterministic gate disposes.
+> **Goal (current):** match SPY with *less* risk via a hands-off ETF rebalancer — not to
+> beat it. The risk gate is sovereign — the strategy proposes, the deterministic gate
+> sizes and disposes. Every config change is validated through the backtest harness across
+> regimes before it touches live money.
 
 ## Status
 
-First slice: **scaffold + the sovereign risk gate** (`risk/`), fully tested. The data
-provider, ingest, screen, signals, strategy, simulated broker, engine, and record/benchmark
-modules are stubbed package skeletons, built in subsequent slices.
+We built the survivorship-aware backtest harness and used it to test broad-screen technical
+momentum / mean-reversion. The honest result: **no retail-reachable edge** (≈0 large-cap,
+negative small-cap under realistic costs). So the project **pivoted** to a low-turnover ETF
+rebalancer (`strategy/rebalance.py`); the disproven alpha logic is preserved, kept runnable,
+under `legacy/` as the honest record. A read-only check-in dashboard lives in `dashboard/`.
 
 ## Quickstart
 
@@ -24,8 +26,28 @@ This project uses [uv](https://docs.astral.sh/uv/) (cross-platform, Windows + ma
 
 uv sync --extra dev          # create venv + install deps
 uv run python -m runner.smoke   # loads config + logging, exits 0
-uv run pytest                # risk-gate adversarial + property tests, smoke
+uv run pytest                # risk-gate adversarial + property tests, rebalancer, smoke
 ```
+
+### Run the rebalancer backtest + check-in dashboard
+
+```bash
+# Multi-window evaluation of a rebalance config vs SPY (bull / drawdown / chop):
+uv run python -m runner.evaluate --mode rebalance
+
+# A single window, then the text report:
+uv run python -m runner.backtest --start 2018-01-01 --end 2023-12-31 --mode rebalance
+uv run python -m record.report --latest
+
+# Export the latest run to JSON and view the read-only dashboard:
+uv run python -m dashboard.export --latest      # -> dashboard/web/public/data.json
+cd dashboard/web && npm install && npm run dev
+```
+
+The rebalancer needs `PAPERHANDS_STRATEGY_MODE=rebalance`,
+`PAPERHANDS_RISK__SIZING=target-weight`, and `PAPERHANDS_ENGINE__SCREEN_BYPASS=true`
+(plus a `PAPERHANDS_REBALANCE__*` basket) — see `.env.example`. Or pass `--mode rebalance`,
+which wires the universe and screen-bypass for you.
 
 ### Fallback (no uv)
 

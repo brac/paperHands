@@ -11,10 +11,10 @@ import pytest
 
 from core.config import StrategyConfig
 from core.contracts import Position, ProposedOrder, ProposedPlan
+from legacy.strategy.guard import enforce_technicals_primary, has_technical_support
+from legacy.strategy.llm import build_prompt, parse_plan
 from signals.signalset import SignalSet
 from strategy import StrategyContext, propose_plan
-from strategy.guard import enforce_technicals_primary, has_technical_support
-from strategy.llm import build_prompt, parse_plan
 
 _CFG = StrategyConfig()
 

@@ -86,6 +86,24 @@ def dist_from_high(df: pd.DataFrame, window: int, column: str = "adj_close") -> 
     return _finite(float(s.iloc[-1]) / high - 1.0)
 
 
+def volume_spike(df: pd.DataFrame, window: int) -> float | None:
+    """Latest volume vs its trailing ``window`` average: ``volume[-1] / mean(window) - 1``.
+
+    The YOLO sleeve's point-in-time-safe 'hype' proxy: a name lighting up on unusual volume is
+    the crowd-attention tell, available purely from the as-of price/volume frame (no look-ahead).
+    Uses **raw** ``volume`` (attention is a count of shares traded, not split-adjusted). The
+    trailing average *includes* the latest bar so a single huge day can't divide by a tiny base;
+    ``None`` on short history or a non-positive average.
+    """
+    if window <= 0 or "volume" not in df.columns or len(df) < window:
+        return None
+    win = df["volume"].iloc[-window:]
+    avg = float(win.mean())
+    if avg <= 0.0:
+        return None
+    return _finite(float(win.iloc[-1]) / avg - 1.0)
+
+
 def zscore(df: pd.DataFrame, window: int, column: str = "adj_close") -> float | None:
     """Mean-reversion z-score: ``(value[-1] - mean) / std`` over ``window`` (sample std)."""
     s = df[column]

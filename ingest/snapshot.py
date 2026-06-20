@@ -16,7 +16,7 @@ from datetime import date
 
 import pandas as pd
 
-from core.contracts import AccountState, FilingFlags, NewsContext
+from core.contracts import AccountState, FilingFlags, HypeContext, NewsContext
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,6 +33,7 @@ class MarketSnapshot:
     filings: Mapping[str, FilingFlags] = field(default_factory=dict)
     news: Mapping[str, NewsContext] = field(default_factory=dict)
     macro: Mapping[str, float] = field(default_factory=dict)
+    social: Mapping[str, HypeContext] = field(default_factory=dict)
 
     @property
     def symbols(self) -> tuple[str, ...]:

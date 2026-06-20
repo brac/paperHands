@@ -8,7 +8,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from core.config import Settings, StrategyConfig, StrategyMode
+from core.config import (
+    RebalanceConfig,
+    Settings,
+    StrategyConfig,
+    StrategyMode,
+    YoloConfig,
+)
 from strategy.client import LLMClient
 
 
@@ -19,6 +25,8 @@ class StrategyContext:
     mode: StrategyMode
     config: StrategyConfig
     llm_client: LLMClient | None = None  # required only in llm mode
+    rebalance: RebalanceConfig | None = None  # required only in rebalance mode
+    yolo: YoloConfig | None = None  # required only in yolo mode
 
 
 def build_strategy_context(
@@ -29,4 +37,6 @@ def build_strategy_context(
         mode=settings.strategy_mode,
         config=settings.strategy,
         llm_client=llm_client,
+        rebalance=settings.rebalance,
+        yolo=settings.yolo,
     )

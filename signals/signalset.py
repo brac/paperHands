@@ -37,6 +37,14 @@ class SignalSet:
     recent_insider_buy: bool = False
     news_sentiment: float | None = None
 
+    # Exotic 'hype' inputs for the YOLO sleeve. ``volume_spike`` is the point-in-time price/volume
+    # proxy (always available); the rest pass through from a real social feed (``HypeContext``)
+    # and stay null/falsy until one is wired. None of these originate a trade outside yolo mode.
+    volume_spike: float | None = None
+    social_score: float | None = None
+    trump_mention: bool = False
+    reddit_mentions: int = 0
+
     def to_dict(self) -> dict[str, Any]:
         """JSON-serializable view (for the record layer and the LLM prompt)."""
         return asdict(self)

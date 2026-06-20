@@ -20,6 +20,8 @@ from ingest.feeds import (
     NullFilings,
     NullMacro,
     NullNews,
+    NullSocial,
+    SocialProvider,
 )
 from ingest.guard import assert_no_look_ahead
 from ingest.snapshot import MarketSnapshot
@@ -35,12 +37,14 @@ class SnapshotAssembler:
         filings: FilingsProvider | None = None,
         news: NewsProvider | None = None,
         macro: MacroProvider | None = None,
+        social: SocialProvider | None = None,
         history_days: int = 600,
     ) -> None:
         self._data = data_provider
         self._filings: FilingsProvider = filings or NullFilings()
         self._news: NewsProvider = news or NullNews()
         self._macro: MacroProvider = macro or NullMacro()
+        self._social: SocialProvider = social or NullSocial()
         self._history_days = history_days
 
     def assemble(
@@ -61,4 +65,5 @@ class SnapshotAssembler:
             filings=dict(self._filings.flags_as_of(symbols, as_of)),
             news=dict(self._news.context_as_of(symbols, as_of)),
             macro=dict(self._macro.values_as_of(as_of)),
+            social=dict(self._social.hype_as_of(symbols, as_of)),
         )

@@ -87,7 +87,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="runner.schedule", description="Run one cycle per trading session (Alpaca clock)."
     )
-    parser.add_argument("--mode", choices=["rules-only", "llm"], help="override strategy mode")
+    parser.add_argument(
+        "--mode", choices=["rules-only", "llm", "rebalance"], help="override strategy mode")
     parser.add_argument("--universe", help="comma-separated symbols (default: full seed)")
     parser.add_argument("--max-cycles", type=int, help="stop after N cycles (default: run forever)")
     args = parser.parse_args(argv)

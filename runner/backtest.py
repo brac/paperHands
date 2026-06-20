@@ -21,7 +21,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--start", help="YYYY-MM-DD (or via --config)")
     parser.add_argument("--end", help="YYYY-MM-DD (or via --config)")
     parser.add_argument("--universe", help="comma-separated symbols (default: full seed)")
-    parser.add_argument("--mode", choices=["rules-only", "llm"], help="override strategy mode")
+    parser.add_argument(
+        "--mode", choices=["rules-only", "llm", "rebalance", "yolo"],
+        help="override strategy mode")
     parser.add_argument("--config", help="JSON run-config; CLI flags override it")
     args = parser.parse_args(argv)
 

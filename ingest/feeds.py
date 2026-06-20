@@ -15,7 +15,7 @@ from collections.abc import Mapping, Sequence
 from datetime import date
 from typing import Protocol, runtime_checkable
 
-from core.contracts import FilingFlags, NewsContext
+from core.contracts import FilingFlags, HypeContext, NewsContext
 
 
 @runtime_checkable
@@ -42,6 +42,19 @@ class MacroProvider(Protocol):
         ...
 
 
+@runtime_checkable
+class SocialProvider(Protocol):
+    """Per-symbol exotic 'hype' context as of a date (Truth-Social / Reddit-WSB, later).
+
+    The YOLO sleeve's secondary feed. Same point-in-time contract: return only data that
+    existed at-or-before ``as_of``. Slice 1 ships only the null default — the proxy hype the
+    sleeve actually trades on is derived from price/volume in ``signals``, not from this feed.
+    """
+
+    def hype_as_of(self, symbols: Sequence[str], as_of: date) -> Mapping[str, HypeContext]:
+        ...
+
+
 class NullFilings:
     """No filings. The Phase-1 default."""
 
@@ -60,4 +73,11 @@ class NullMacro:
     """No macro context. The Phase-1 default."""
 
     def values_as_of(self, as_of: date) -> Mapping[str, float]:
+        return {}
+
+
+class NullSocial:
+    """No social/hype data. The Slice-1 default (the YOLO proxy needs no feed)."""
+
+    def hype_as_of(self, symbols: Sequence[str], as_of: date) -> Mapping[str, HypeContext]:
         return {}

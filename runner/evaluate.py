@@ -60,7 +60,12 @@ def evaluate(
     provider = provider or build_data_provider(settings)
     store = store or BacktestStore(settings.record.db_path)
     uni = tuple(universe) if universe is not None else None
-    size = len(uni) if uni is not None else len(build_universe_provider(settings).symbols())
+    if uni is not None:
+        size = len(uni)
+    elif settings.strategy_mode == "rebalance":
+        size = len(settings.rebalance.universe())  # the fixed ETF basket
+    else:
+        size = len(build_universe_provider(settings).symbols())
 
     outcomes: list[WindowOutcome] = []
     for window in windows:
@@ -130,7 +135,9 @@ def main(argv: list[str] | None = None) -> int:
 
     parser = argparse.ArgumentParser(prog="runner.evaluate")
     parser.add_argument("--universe", help="comma-separated symbols (default: full seed)")
-    parser.add_argument("--mode", choices=["rules-only", "llm"], help="override strategy mode")
+    parser.add_argument(
+        "--mode", choices=["rules-only", "llm", "rebalance", "yolo"],
+        help="override strategy mode")
     parser.add_argument("--windows", help="JSON file of custom windows (default: DEFAULT_WINDOWS)")
     args = parser.parse_args(argv)
 

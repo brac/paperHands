@@ -31,6 +31,9 @@ def run_backtest(
 ) -> RunSummary:
     """Run one backtest over [start, end] and record it; return the portfolio-vs-SPY summary."""
     provider = provider or build_data_provider(settings)
+    # The rebalancer's universe is its fixed ETF basket; default to it when none is given.
+    if universe is None and settings.strategy_mode == "rebalance":
+        universe = settings.rebalance.universe()
     engine = build_engine(settings, provider=provider, llm_client=llm_client)
     result = engine.run(start, end, universe=universe)
     return record_run(result, provider, settings, run_id=run_id, store=store)
